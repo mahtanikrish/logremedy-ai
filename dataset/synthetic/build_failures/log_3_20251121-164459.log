@@ -1,0 +1,43 @@
+-------------------
+
+-------------------
+build\tstep\t2023-10-01T12:00:00Z Starting build job...
+build\tstep\t2023-10-01T12:00:01Z ##[group] Checkout code
+build\tstep\t2023-10-01T12:00:01Z Cloning repository...
+build\tstep\t2023-10-01T12:00:02Z Checking out branch 'main'...
+build\tstep\t2023-10-01T12:00:03Z ##[endgroup]
+build\tstep\t2023-10-01T12:00:04Z Setting up Node.js environment...
+build\tstep\t2023-10-01T12:00:05Z Using Node.js version 14.x
+build\tstep\t2023-10-01T12:00:06Z Installing dependencies...
+build\tstep\t2023-10-01T12:00:07Z > npm install
+build\tstep\t2023-10-01T12:00:08Z added 50 packages from 30 contributors and audited 50 packages in 2.5s
+build\tstep\t2023-10-01T12:00:09Z found 0 vulnerabilities
+build\tstep\t2023-10-01T12:00:10Z ##[group] Build project
+build\tstep\t2023-10-01T12:00:10Z > npm run build
+build\tstep\t2023-10-01T12:00:11Z > my-project@1.0.0 build /home/runner/work/my-project
+build\tstep\t2023-10-01T12:00:12Z > tsc
+build\tstep\t2023-10-01T12:00:13Z ✔  Compiled successfully.
+build\tstep\t2023-10-01T12:00:14Z ##[endgroup]
+build\tstep\t2023-10-01T12:00:15Z Build completed successfully.
+
+test\tstep\t2023-10-01T12:00:16Z Starting test job...
+test\tstep\t2023-10-01T12:00:17Z ##[group] Running unit tests
+test\tstep\t2023-10-01T12:00:17Z > npm test
+test\tstep\t2023-10-01T12:00:18Z > my-project@1.0.0 test /home/runner/work/my-project
+test\tstep\t2023-10-01T12:00:19Z > jest
+test\tstep\t2023-10-01T12:00:20Z  PASS  src/__tests__/example.test.js
+test\tstep\t2023-10-01T12:00:20Z  FAIL  src/__tests__/unit.test.js
+test\tstep\t2023-10-01T12:00:21Z   ● Test suite failed to run
+test\tstep\t2023-10-01T12:00:21Z     ReferenceError: someFunction is not defined
+test\tstep\t2023-10-01T12:00:22Z       at Object.<anonymous> (src/__tests__/unit.test.js:5:5)
+test\tstep\t2023-10-01T12:00:23Z Test suite failed to run.
+test\tstep\t2023-10-01T12:00:24Z Test Suites: 1 failed, 1 passed, 2 total
+test\tstep\t2023-10-01T12:00:25Z Tests:       1 failed, 1 passed, 2 total
+test\tstep\t2023-10-01T12:00:26Z ##[endgroup]
+test\tstep\t2023-10-01T12:00:27Z Error: Process completed with exit code 1.
+
+deploy\tstep\t2023-10-01T12:00:28Z Starting deploy job...
+deploy\tstep\t2023-10-01T12:00:29Z Deploying to production...
+deploy\tstep\t2023-10-01T12:00:30Z Deployment completed successfully.
+
+-------------------------

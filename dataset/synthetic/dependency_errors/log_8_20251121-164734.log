@@ -1,0 +1,42 @@
+-------------------
+
+-------------------
+build\tsetup\t2023-10-01T10:00:00Z Starting job: build
+build\tstep\t2023-10-01T10:00:01Z Setting up Node.js environment
+build\tstep\t2023-10-01T10:00:02Z Using Node.js version 16.x
+build\tstep\t2023-10-01T10:00:03Z Installing dependencies...
+build\tstep\t2023-10-01T10:00:04Z ##[group]Installing npm packages
+build\tstep\t2023-10-01T10:00:05Z > my-project@1.0.0 install /home/runner/work/my-project/my-project
+build\tstep\t2023-10-01T10:00:06Z > node-gyp rebuild
+build\tstep\t2023-10-01T10:00:07Z npm WARN deprecated request@2.88.2: request has been deprecated, see https://github.com/request/request/issues/3142
+build\tstep\t2023-10-01T10:00:08Z npm WARN my-project@1.0.0 No repository field.
+build\tstep\t2023-10-01T10:00:09Z ##[endgroup]
+build\tstep\t2023-10-01T10:00:10Z ##[group]Running build script
+build\tstep\t2023-10-01T10:00:11Z > my-project@1.0.0 build /home/runner/work/my-project/my-project
+build\tstep\t2023-10-01T10:00:12Z > webpack --mode production
+build\tstep\t2023-10-01T10:00:13Z Compiling...
+build\tstep\t2023-10-01T10:00:14Z [32m✔  Build completed successfully![0m
+test\tsetup\t2023-10-01T10:00:15Z Starting job: test
+test\tstep\t2023-10-01T10:00:16Z Running unit tests...
+test\tstep\t2023-10-01T10:00:17Z ##[group]Running Jest tests
+test\tstep\t2023-10-01T10:00:18Z PASS  src/__tests__/example.test.js
+test\tstep\t2023-10-01T10:00:19Z [32m✔  All tests passed![0m
+test\tstep\t2023-10-01T10:00:20Z ##[endgroup]
+deploy\tsetup\t2023-10-01T10:00:21Z Starting job: deploy
+deploy\tstep\t2023-10-01T10:00:22Z Deploying to production...
+deploy\tstep\t2023-10-01T10:00:23Z ##[group]Deploying application
+deploy\tstep\t2023-10-01T10:00:24Z Deploying version 1.0.0
+deploy\tstep\t2023-10-01T10:00:25Z [33mWarning: Deployment may take a while.[0m
+deploy\tstep\t2023-10-01T10:00:26Z ##[endgroup]
+deploy\tstep\t2023-10-01T10:00:27Z Deployment finished successfully.
+build\tstep\t2023-10-01T10:00:28Z ##[group]Installing npm packages
+build\tstep\t2023-10-01T10:00:29Z > my-project@1.0.0 install /home/runner/work/my-project/my-project
+build\tstep\t2023-10-01T10:00:30Z > node-gyp rebuild
+build\tstep\t2023-10-01T10:00:31Z npm ERR! code E404
+build\tstep\t2023-10-01T10:00:32Z npm ERR! 404 Not Found - GET https://registry.npmjs.org/some-missing-package - Not found
+build\tstep\t2023-10-01T10:00:33Z npm ERR! 404 - https://registry.npmjs.org/some-missing-package
+build\tstep\t2023-10-01T10:00:34Z npm ERR! A complete log of this run can be found in:
+build\tstep\t2023-10-01T10:00:35Z npm ERR!     /home/runner/.npm/_logs/2023-10-01T10_00_32_000Z-debug.log
+build\tstep\t2023-10-01T10:00:36Z ##[error]Node dependency installation failed
+build\tstep\t2023-10-01T10:00:37Z Job failed: build
+-------------------------

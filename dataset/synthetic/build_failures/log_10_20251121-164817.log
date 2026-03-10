@@ -1,0 +1,34 @@
+-------------------
+
+-------------------
+build\tsetup\t2023-10-01T12:00:00Z Starting setup for build job
+build\tsetup\t2023-10-01T12:00:01Z Setting up Node.js environment
+build\tsetup\t2023-10-01T12:00:02Z Using Node.js version 14.x
+build\tsetup\t2023-10-01T12:00:03Z Installing dependencies...
+build\tsetup\t2023-10-01T12:00:05Z npm install --silent
+build\tsetup\t2023-10-01T12:00:07Z Dependencies installed successfully
+build\tsetup\t2023-10-01T12:00:08Z ##[group]Build Steps
+build\tstep\t2023-10-01T12:00:09Z Running build script
+build\tstep\t2023-10-01T12:00:10Z Compiling TypeScript files...
+build\tstep\t2023-10-01T12:00:12Z ✔  Compiled 10 files successfully.
+build\tstep\t2023-10-01T12:00:13Z ##[endgroup]
+test\tsetup\t2023-10-01T12:00:14Z Starting setup for test job
+test\tsetup\t2023-10-01T12:00:15Z Setting up testing environment
+test\tsetup\t2023-10-01T12:00:16Z Using Jest for testing
+test\tstep\t2023-10-01T12:00:17Z Running tests...
+test\tstep\t2023-10-01T12:00:18Z Test suite running...
+test\tstep\t2023-10-01T12:00:19Z ✖  Test failed: SyntaxError: Unexpected token
+test\tstep\t2023-10-01T12:00:20Z ##[group]Test Results
+test\tstep\t2023-10-01T12:00:21Z 1 test failed
+test\tstep\t2023-10-01T12:00:22Z 0 tests passed
+test\tstep\t2023-10-01T12:00:23Z ##[endgroup]
+test\tstep\t2023-10-01T12:00:24Z ##[error]FAILURE: syntax error in script
+test\tstep\t2023-10-01T12:00:25Z Error details: SyntaxError: Unexpected token in script.js at line 10
+deploy\tsetup\t2023-10-01T12:00:26Z Starting setup for deploy job
+deploy\tsetup\t2023-10-01T12:00:27Z Deploying to production environment
+deploy\tstep\t2023-10-01T12:00:28Z Running deployment script...
+deploy\tstep\t2023-10-01T12:00:29Z Deployment completed successfully
+deploy\tstep\t2023-10-01T12:00:30Z Cleaning up temporary files
+deploy\tstep\t2023-10-01T12:00:31Z Temporary files cleaned up
+
+-------------------------

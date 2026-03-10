@@ -1,0 +1,51 @@
+-------------------
+
+-------------------
+build\tsetup\t2023-10-01T10:00:00Z Starting build job
+build\tsetup\t2023-10-01T10:00:01Z Setting up Node.js environment
+build\tsetup\t2023-10-01T10:00:02Z Node.js version: v16.13.1
+build\tsetup\t2023-10-01T10:00:03Z npm version: 8.1.2
+build\tsetup\t2023-10-01T10:00:04Z Installing dependencies...
+build\tsetup\t2023-10-01T10:00:05Z ##[group]Installing node packages
+build\tsetup\t2023-10-01T10:00:06Z > npm install
+build\tsetup\t2023-10-01T10:00:06Z npm WARN deprecated request@2.88.2: Request is deprecated, see https://github.com/request/request/issues/3142
+build\tsetup\t2023-10-01T10:00:07Z npm WARN deprecated uuid@3.4.0: Please upgrade to version 7 or higher
+build\tsetup\t2023-10-01T10:00:08Z added 50 packages from 40 contributors and audited 150 packages in 2.345s
+build\tsetup\t2023-10-01T10:00:08Z ##[endgroup]
+build\tsetup\t2023-10-01T10:00:09Z Dependencies installed successfully
+build\tstep\t2023-10-01T10:00:10Z Running build script
+build\tstep\t2023-10-01T10:00:11Z > npm run build
+build\tstep\t2023-10-01T10:00:12Z > build
+build\tstep\t2023-10-01T10:00:12Z > webpack --mode production
+build\tstep\t2023-10-01T10:00:13Z Hash: 1234567890abcdef1234
+build\tstep\t2023-10-01T10:00:13Z Version: webpack 5.64.0
+build\tstep\t2023-10-01T10:00:14Z Time: 1234ms
+build\tstep\t2023-10-01T10:00:14Z Asset       Size  Chunks             Chunk Names
+build\tstep\t2023-10-01T10:00:14Z main.js   10.5 KiB       0  [emitted]  main
+build\tstep\t2023-10-01T10:00:14Z Entrypoint main = main.js
+build\tstep\t2023-10-01T10:00:15Z ##[group]Running tests
+build\tstep\t2023-10-01T10:00:16Z > npm test
+build\tstep\t2023-10-01T10:00:17Z > test
+build\tstep\t2023-10-01T10:00:17Z > jest
+build\tstep\t2023-10-01T10:00:18Z PASS  tests/example.test.js
+build\tstep\t2023-10-01T10:00:18Z Test Suites: 1 passed, 1 total
+build\tstep\t2023-10-01T10:00:18Z Tests:       1 passed, 1 total
+build\tstep\t2023-10-01T10:00:19Z ##[endgroup]
+build\tstep\t2023-10-01T10:00:20Z Build and tests completed successfully
+deploy\tsetup\t2023-10-01T10:00:21Z Starting deploy job
+deploy\tsetup\t2023-10-01T10:00:22Z Deploying to production environment
+deploy\tstep\t2023-10-01T10:00:23Z Checking for previous builds
+deploy\tstep\t2023-10-01T10:00:24Z Previous build found, proceeding with deployment
+deploy\tstep\t2023-10-01T10:00:25Z Uploading build artifacts...
+deploy\tstep\t2023-10-01T10:00:26Z ##[group]Deploying application
+deploy\tstep\t2023-10-01T10:00:27Z > npm install --production
+deploy\tstep\t2023-10-01T10:00:28Z npm ERR! code E404
+deploy\tstep\t2023-10-01T10:00:29Z npm ERR! 404 Not Found - GET https://registry.npmjs.org/some-missing-package - Not found
+deploy\tstep\t2023-10-01T10:00:30Z npm ERR! A complete log of this run can be found in:
+deploy\tstep\t2023-10-01T10:00:31Z npm ERR!     /home/runner/.npm/_logs/2023-10-01T10_00_29_123Z-debug.log
+deploy\tstep\t2023-10-01T10:00:32Z ##[endgroup]
+deploy\tstep\t2023-10-01T10:00:33Z Deployment failed due to node dependency installation failure
+deploy\tstep\t2023-10-01T10:00:34Z Cleaning up deployment environment
+deploy\tstep\t2023-10-01T10:00:35Z Deployment cleanup completed
+
+-------------------------

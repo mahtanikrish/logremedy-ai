@@ -1,0 +1,13 @@
+{
+    "failure_type": "deployment timeout",
+    "root_cause": "The deployment script took longer than the allowed time limit to complete.",
+    "evidence_lines": [
+        "deploy\tstep\t2023-10-01T12:00:19Z WARNING: Deployment taking longer than expected.",
+        "deploy\tstep\t2023-10-01T12:00:30Z ERROR: Deployment timed out after 30 seconds.",
+        "deploy\tstep\t2023-10-01T12:00:31Z Deployment failed."
+    ],
+    "remediation_steps": [
+        "Increase the deployment timeout limit in the GitHub Actions workflow.",
+        "Optimize the deployment script to reduce execution time."
+    ]
+}

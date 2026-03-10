@@ -1,0 +1,45 @@
+-------------------
+
+-------------------
+build\tsetup\t2023-10-01T12:00:00Z Starting build job...
+build\tsetup\t2023-10-01T12:00:01Z Setting up Node.js environment...
+build\tsetup\t2023-10-01T12:00:02Z Node.js version: 16.x
+build\tsetup\t2023-10-01T12:00:02Z Installing dependencies...
+build\tsetup\t2023-10-01T12:00:03Z Running: npm install
+build\tsetup\t2023-10-01T12:00:04Z > my-project@1.0.0 install /home/runner/work/my-project
+build\tsetup\t2023-10-01T12:00:04Z > node install.js
+build\tsetup\t2023-10-01T12:00:05Z ✔ Installed 50 packages
+build\tsetup\t2023-10-01T12:00:05Z Dependencies installed successfully.
+build\tsetup\t2023-10-01T12:00:06Z ##[group]Building the project
+build\tbuild\t2023-10-01T12:00:06Z Running: npm run build
+build\tbuild\t2023-10-01T12:00:07Z > my-project@1.0.0 build /home/runner/work/my-project
+build\tbuild\t2023-10-01T12:00:07Z > tsc
+build\tbuild\t2023-10-01T12:00:08Z ✔ Compilation completed successfully.
+build\tbuild\t2023-10-01T12:00:08Z ##[endgroup]
+build\tsetup\t2023-10-01T12:00:09Z Build job completed successfully.
+
+test\tsetup\t2023-10-01T12:00:10Z Starting test job...
+test\tsetup\t2023-10-01T12:00:11Z Running tests...
+test\tsetup\t2023-10-01T12:00:12Z ##[group]Running unit tests
+test\ttest\t2023-10-01T12:00:12Z Running: npm test
+test\ttest\t2023-10-01T12:00:13Z > my-project@1.0.0 test /home/runner/work/my-project
+test\ttest\t2023-10-01T12:00:13Z > jest
+test\ttest\t2023-10-01T12:00:14Z  PASS  tests/example.test.js
+test\ttest\t2023-10-01T12:00:14Z  FAIL  tests/unit.test.js
+test\ttest\t2023-10-01T12:00:14Z ✖ Test suite failed to run
+test\ttest\t2023-10-01T12:00:14Z Error: TypeError: Cannot read property 'foo' of undefined
+test\ttest\t2023-10-01T12:00:15Z     at Object.<anonymous> (tests/unit.test.js:10:20)
+test\ttest\t2023-10-01T12:00:15Z     at Array.forEach (<anonymous>)
+test\ttest\t2023-10-01T12:00:15Z  ● Test suite failed to run
+test\ttest\t2023-10-01T12:00:15Z Test suite failed due to the above error.
+test\tsetup\t2023-10-01T12:00:16Z ##[endgroup]
+test\tsetup\t2023-10-01T12:00:17Z Test job completed with failures.
+
+deploy\tsetup\t2023-10-01T12:00:18Z Starting deploy job...
+deploy\tsetup\t2023-10-01T12:00:19Z Deploying to production environment...
+deploy\tsetup\t2023-10-01T12:00:20Z Running: npm run deploy
+deploy\tsetup\t2023-10-01T12:00:21Z > my-project@1.0.0 deploy /home/runner/work/my-project
+deploy\tsetup\t2023-10-01T12:00:21Z ✔ Deployment completed successfully.
+deploy\tsetup\t2023-10-01T12:00:22Z Deploy job completed successfully.
+
+-------------------------

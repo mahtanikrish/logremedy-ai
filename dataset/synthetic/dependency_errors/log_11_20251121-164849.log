@@ -1,0 +1,45 @@
+-------------------
+
+-------------------
+build\tsetup\t2023-10-01 10:00:00 Setting up the build environment...
+build\tsetup\t2023-10-01 10:00:01 Checking out the repository...
+build\tsetup\t2023-10-01 10:00:02 Using Node.js version 14.x
+build\tsetup\t2023-10-01 10:00:03 Installing dependencies...
+build\tsetup\t2023-10-01 10:00:05 npm install
+build\tsetup\t2023-10-01 10:00:06 > my-project@1.0.0 install /home/runner/work/my-project
+build\tsetup\t2023-10-01 10:00:06 > node ./scripts/install.js
+build\tsetup\t2023-10-01 10:00:07 ✔ Installed packages successfully.
+build\tsetup\t2023-10-01 10:00:08 ##[group]Running build steps
+build\tbuild\t2023-10-01 10:00:09 Starting build process...
+build\tbuild\t2023-10-01 10:00:10 Compiling TypeScript files...
+build\tbuild\t2023-10-01 10:00:12 ✔ Compilation successful.
+build\tbuild\t2023-10-01 10:00:13 Running lint checks...
+build\tbuild\t2023-10-01 10:00:14 ✔ Linting completed without errors.
+build\tbuild\t2023-10-01 10:00:15 ##[endgroup]
+build\tsetup\t2023-10-01 10:00:16 Starting tests...
+test\tsetup\t2023-10-01 10:00:17 Setting up test environment...
+test\tsetup\t2023-10-01 10:00:18 Using Python version 3.8
+test\tsetup\t2023-10-01 10:00:19 Installing test dependencies...
+test\tsetup\t2023-10-01 10:00:20 pip install -r requirements.txt
+test\tsetup\t2023-10-01 10:00:21 Collecting pytest
+test\tsetup\t2023-10-01 10:00:21   Downloading pytest-6.2.4-py3-none-any.whl (280 kB)
+test\tsetup\t2023-10-01 10:00:22 Successfully installed pytest-6.2.4
+test\tsetup\t2023-10-01 10:00:23 ##[group]Running tests
+test\ttest\t2023-10-01 10:00:24 Running unit tests...
+test\ttest\t2023-10-01 10:00:25 ============================= test session starts =============================
+test\ttest\t2023-10-01 10:00:26 platform linux -- Python 3.8.10, pytest-6.2.4, py-3.8.10
+test\ttest\t2023-10-01 10:00:27 collected 10 items
+test\ttest\t2023-10-01 10:00:28 test_example.py .....F
+test\ttest\t2023-10-01 10:00:28 =================================== FAILURES ===================================
+test\ttest\t2023-10-01 10:00:29 ____________________________ test_version_mismatch ____________________________
+test\ttest\t2023-10-01 10:00:30 AssertionError: expected version 1.0.0 but got 1.0.1
+test\ttest\t2023-10-01 10:00:31 ##[endgroup]
+test\tsetup\t2023-10-01 10:00:32 Tests completed with failures.
+deploy\tsetup\t2023-10-01 10:00:33 Deploying application...
+deploy\tsetup\t2023-10-01 10:00:34 Building Docker image...
+deploy\tsetup\t2023-10-01 10:00:35 Sending build context to Docker daemon  3.072kB
+deploy\tsetup\t2023-10-01 10:00:36 Step 1/5 : FROM node:14
+deploy\tsetup\t2023-10-01 10:00:37 Successfully built image.
+deploy\tsetup\t2023-10-01 10:00:38 Deployment completed successfully.
+
+-------------------------

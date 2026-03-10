@@ -1,0 +1,12 @@
+{
+    "failure_type": "version mismatch",
+    "root_cause": "Deployment attempted with incompatible package version.",
+    "evidence_lines": [
+        "deploy\tsetup\t2023-10-01T10:00:31Z ERROR: Version mismatch detected! Expected version 2.0.0 but found 1.8.0.",
+        "deploy\tsetup\t2023-10-01T10:00:32Z Deployment failed due to version mismatch."
+    ],
+    "remediation_steps": [
+        "Update the package to the expected version 2.0.0.",
+        "Verify the version in the deployment configuration."
+    ]
+}

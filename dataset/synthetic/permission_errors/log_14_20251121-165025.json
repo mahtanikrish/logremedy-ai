@@ -1,0 +1,12 @@
+{
+    "failure_type": "permission denied executing script",
+    "root_cause": "The deployment script does not have execute permissions.",
+    "evidence_lines": [
+        "deploy\tstep\t2023-10-01 12:00:35 ##[error] Permission denied executing script",
+        "deploy\tstep\t2023-10-01 12:00:36 Error: script execution failed"
+    ],
+    "remediation_steps": [
+        "Run 'chmod +x deploy.sh' to make the script executable.",
+        "Ensure the script is located in the correct directory."
+    ]
+}
