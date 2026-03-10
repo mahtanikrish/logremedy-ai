@@ -1,4 +1,5 @@
 import pytest
+import requests
 
 from gha_remediator.ingestion import github_actions as gha
 
@@ -87,3 +88,25 @@ def test_load_logs_with_artifacts(monkeypatch):
 def test_load_logs_rejects_bad_limit():
     with pytest.raises(ValueError):
         gha.load_github_actions_logs("octocat/hello-world", limit=0, token="x")
+
+
+def test_skips_410_runs_and_uses_next(monkeypatch):
+    monkeypatch.setattr(gha, "_session", lambda token: object())
+    monkeypatch.setattr(
+        gha,
+        "_failed_runs",
+        lambda s, owner, name, per_page: [{"id": 100}, {"id": 200}],
+    )
+
+    def _download(s, owner, name, run_id):
+        if run_id == 100:
+            r = requests.Response()
+            r.status_code = 410
+            raise requests.HTTPError("410 Gone", response=r)
+        return [("job.txt", "usable log")]
+
+    monkeypatch.setattr(gha, "_download_run_logs", _download)
+
+    out = gha.load_github_actions_logs("octocat/hello-world", limit=1, token="x")
+    assert len(out) == 1
+    assert out[0]["metadata"]["run_id"] == 200

@@ -62,9 +62,9 @@ def _failed_runs(
     session: requests.Session,
     owner: str,
     name: str,
-    limit: int,
+    per_page: int,
 ) -> List[Dict[str, Any]]:
-    per_page = min(max(limit, 1), 100)
+    per_page = min(max(per_page, 1), 100)
     url = f"{GITHUB_API}/repos/{owner}/{name}/actions/runs"
     data = _get_json(
         session,
@@ -75,7 +75,7 @@ def _failed_runs(
             "per_page": per_page,
         },
     )
-    return list(data.get("workflow_runs", []))[:limit]
+    return list(data.get("workflow_runs", []))
 
 
 def _run_by_id(session: requests.Session, owner: str, name: str, run_id: int) -> Dict[str, Any]:
@@ -147,12 +147,23 @@ def load_github_actions_logs(
     if run_id is not None:
         runs = [_run_by_id(s, owner, name, run_id)]
     else:
-        runs = _failed_runs(s, owner, name, limit)
+        per_page = min(max(limit * 5, 20), 100)
+        runs = _failed_runs(s, owner, name, per_page)
 
     normalized: List[Dict[str, Any]] = []
     for run in runs:
+        if len(normalized) >= limit:
+            break
         rid = int(run["id"])
-        logs = _download_run_logs(s, owner, name, rid)
+        try:
+            logs = _download_run_logs(s, owner, name, rid)
+        except requests.HTTPError as e:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+            if status == 410 and run_id is None:
+                continue
+            if status == 410 and run_id is not None:
+                raise RuntimeError(f"Logs for run_id={rid} are no longer available (HTTP 410 Gone).") from e
+            raise
 
         artifact_paths: List[str] = []
         if include_artifacts:
@@ -178,5 +189,11 @@ def load_github_actions_logs(
                     },
                 }
             )
+
+    if run_id is None and not normalized:
+        raise RuntimeError(
+            "No failed runs with downloadable logs were found. "
+            "Recent failed runs may have expired logs (HTTP 410)."
+        )
 
     return normalized
