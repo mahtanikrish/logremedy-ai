@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Tuple
 
 ALLOWED_PATH_PREFIXES = (
     ".github/workflows/",
@@ -18,6 +17,10 @@ ALLOWED_FILES = {
 BANNED_COMMAND_SUBSTRINGS = [
     "curl ",
     "wget ",
+    "git ",
+    "gh ",
+    "svn ",
+    "hg ",
     "rm -rf /",
     "sudo rm",
     "printenv",

