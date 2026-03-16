@@ -63,7 +63,6 @@ The core research contribution. Gates run sequentially; the first failure short-
 
 - Python 3.10+
 - `pip install -e .` to install the package in editable mode
-- `pip install openai` — required for `--llm` mode (OpenAI Responses API)
 - `pip install pyyaml` — required for workflow YAML static validation
 - [`act`](https://github.com/nektos/act) — required for `--replay` (Gate D CI replay)
 
@@ -90,23 +89,13 @@ gha-remediator-web --repo owner/repo --verify-repo . --poll-seconds 20
 Then open `http://127.0.0.1:7860`.
 
 
-### With LLM (GitHub Models)
+### Run the pipeline
 ```bash
 export GITHUB_TOKEN=<your-token>
 python -m gha_remediator run \
   --log examples/failure_module_not_found.log \
   --repo . \
-  --llm --model gpt-4o-mini
-```
-
-### With LLM (OpenAI)
-```bash
-pip install openai
-export OPENAI_API_KEY=<your-key>
-python -m gha_remediator run \
-  --log examples/failure_module_not_found.log \
-  --repo . \
-  --llm --model gpt-4o
+  --model gpt-4o-mini
 ```
 
 ### With CI replay (Gate D)
@@ -132,7 +121,7 @@ python -m gha_remediator run \
 The `dataset/synthetic/` directory contains labelled failure logs with ground truth.
 
 ```bash
-# Run on all synthetic logs (heuristic mode)
+# Run on a synthetic log
 python -m gha_remediator run \
   --log dataset/synthetic/dependency_errors/missing_module_01.log \
   --repo .
@@ -154,8 +143,7 @@ pytest -v
 
 | Variable | Required for |
 |----------|-------------|
-| `GITHUB_TOKEN` | `--llm` with GitHub Models API |
-| `OPENAI_API_KEY` | `--llm` with OpenAI Responses API |
+| `GITHUB_TOKEN` | CLI and web app LLM execution |
 
 ---
 
@@ -169,7 +157,7 @@ gha_remediator/
 ├── logs.py                 Log parsing, ANSI stripping, success template extraction
 ├── preprocess.py           Evidence extraction: filter → expand → prune
 ├── classifier.py           Rule-based failure classification
-├── rca.py                  Root-cause analysis (heuristic or LLM)
+├── rca.py                  Root-cause analysis
 ├── rag.py                  BM25 retrieval and KnowledgeBase
 ├── prompts.py              LLM system prompts and schema hints
 ├── llm/

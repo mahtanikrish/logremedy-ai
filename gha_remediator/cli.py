@@ -33,7 +33,6 @@ def main():
     runp.add_argument("--job", default=None, help="Optional job name for act -j <job>")
     runp.add_argument("--out", default=None, help="Write JSON output to file")
 
-    runp.add_argument("--llm", action="store_true", help="Enable LLM for RCA + planning (OpenAI Responses API)")
     runp.add_argument("--model", default="gpt-5.2", help="Model name (default gpt-5.2)")
     runp.add_argument("--reasoning-effort", default=None, help="Optional reasoning effort (e.g. medium/high)")
     runp.add_argument("--temperature", type=float, default=None, help="Optional temperature")
@@ -44,20 +43,15 @@ def main():
     runp.add_argument("--no-ground-truth", action="store_true", help="Ignore ground truth labels (if present)")
 
     args = ap.parse_args()
-    
+
     kb = _default_kb()
-
-    llm = None
-    llm_cfg = None
-
-    if args.llm:
-        llm = GitHubModelsClient()
-        llm_cfg = LLMConfig(
-            model=args.model,
-            max_output_tokens=args.max_output_tokens,
-            temperature=args.temperature,
-        )
-
+    llm = GitHubModelsClient()
+    llm_cfg = LLMConfig(
+        model=args.model,
+        max_output_tokens=args.max_output_tokens,
+        temperature=args.temperature,
+        reasoning_effort=args.reasoning_effort,
+    )
 
     remediator = GHARemediator(kb=kb, llm=llm, llm_cfg=llm_cfg)
 
