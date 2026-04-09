@@ -10,6 +10,13 @@ from ..pipeline import GHARemediator
 from ..rag import Doc, KnowledgeBase
 
 
+def normalize_repo_path(repo: str) -> str:
+    repo = repo.strip() or "."
+    if repo.startswith("Users/"):
+        repo = "/" + repo
+    return str(Path(repo).expanduser().resolve())
+
+
 def default_kb() -> KnowledgeBase:
     return KnowledgeBase(
         [
@@ -49,16 +56,21 @@ def combine_github_logs(entries: List[Dict[str, Any]]) -> str:
 
 def run_synthetic_analysis(log_path: str, repo: str, model: str) -> tuple[Dict[str, Any], str]:
     raw_log_text = Path(log_path).read_text(encoding="utf-8", errors="replace")
-    result = build_remediator(model).run(
+    return run_synthetic_analysis_text(raw_log_text=raw_log_text, repo=repo, model=model), raw_log_text
+
+
+def run_synthetic_analysis_text(raw_log_text: str, repo: str, model: str) -> Dict[str, Any]:
+    repo = normalize_repo_path(repo)
+    return build_remediator(model).run(
         raw_log_text=raw_log_text,
         repo=repo,
         replay=False,
         job=None,
     )
-    return result, raw_log_text
 
 
 def run_github_analysis(repo_name: str, run_id: int | None, verify_repo: str, model: str) -> tuple[Dict[str, Any], int | None, str]:
+    verify_repo = normalize_repo_path(verify_repo)
     entries = load_github_actions_logs(
         repo=repo_name,
         run_id=run_id,

@@ -5,7 +5,7 @@ from typing import Optional, Protocol, Dict, Any
 
 @dataclass(frozen=True)
 class LLMConfig:
-    model: str = "gpt-5.2"
+    model: str = "gpt-4o-mini"
     reasoning_effort: Optional[str] = None
     temperature: Optional[float] = None
     max_output_tokens: Optional[int] = 1200

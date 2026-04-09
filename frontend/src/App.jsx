@@ -6,12 +6,12 @@ const INITIAL_FORM = {
   synthetic: {
     logName: "",
     rawLogText: "",
-    repo: "",
+    repo: "/Users/krishmahtani/Desktop/actions-log-generator",
   },
   github: {
     repoName: "",
     runId: "",
-    verifyRepo: "",
+    verifyRepo: "/Users/krishmahtani/Desktop/actions-log-generator",
   },
 };
 
@@ -167,9 +167,9 @@ function App() {
     setForm((current) => ({
       ...current,
       synthetic: {
-        logName: "log_1_20251121-164424.log",
+        logName: "log_2_20251121-164442.log",
         rawLogText: "",
-        repo: ".",
+        repo: "/Users/krishmahtani/Desktop/actions-log-generator",
       },
     }));
     setSelectedSyntheticFile(null);
@@ -183,7 +183,7 @@ function App() {
       github: {
         repoName: "mahtanikrish/actions-log-generator",
         runId: "",
-        verifyRepo: ".",
+        verifyRepo: "/Users/krishmahtani/Desktop/actions-log-generator",
       },
     }));
     setStatusText("Loaded demo GitHub case.");
@@ -196,7 +196,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Final year project demo</p>
-          <h1>GHA Remediator</h1>
+          <h1>Log Clinic</h1>
           <p className="subtitle">
             AI-powered GitHub Actions log analysis and remediation with verification-gated fixes.
           </p>

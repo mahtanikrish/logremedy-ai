@@ -9,7 +9,5 @@ __pycache__/
 
 # Local outputs
 results/
-
-# Legacy frontend files kept locally as fallback copies
-gha_remediator/desktop_app.py
-gha_remediator/desktop_app1.py
+frontend/node_modules/
+frontend/dist/
