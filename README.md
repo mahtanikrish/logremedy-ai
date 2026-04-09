@@ -70,23 +70,34 @@ The core research contribution. Gates run sequentially; the first failure short-
 
 ## Quick Start
 
-### Run as a local app (basic web UI)
+### Run as a local web app
 ```bash
 pip install -e ".[web]"
 ```
 
-#### Synthetic mode (local dataset directory picker)
+#### Development mode
 ```bash
-gha-remediator-web --synthetic-root dataset/synthetic --verify-repo .
+python -m gha_remediator.web_app
 ```
 
-#### GitHub mode (auto-monitor failed Actions runs)
 ```bash
-export GITHUB_TOKEN=<your-token>
-gha-remediator-web --repo owner/repo --verify-repo . --poll-seconds 20
+cd frontend
+npm install
+npm run dev
 ```
 
-Then open `http://127.0.0.1:7860`.
+Then open `http://127.0.0.1:5173`.
+
+#### Single-process built mode
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+python -m gha_remediator.web_app
+```
+
+Then open `http://127.0.0.1:8000`.
 
 
 ### Run the pipeline

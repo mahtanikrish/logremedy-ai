@@ -1,34 +1,13 @@
 # macOS
 .DS_Store
 
-# Python bytecode/cache
+# Python cache/build artifacts
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Virtual environments
-.venv/
-venv/
-env/
-
-# Build/package artifacts
-build/
-dist/
 *.egg-info/
-.eggs/
-
-# Test/cache tooling
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.coverage
-.coverage.*
-htmlcov/
 
-# IDE/editor
-.vscode/
-.idea/
-
-# Local app/runtime outputs
-artifacts/
+# Local outputs
 results/
+frontend/node_modules/
+frontend/dist/
