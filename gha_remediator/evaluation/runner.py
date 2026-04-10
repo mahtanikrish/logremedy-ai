@@ -58,7 +58,7 @@ def _run_case_with_retries(
     *,
     remediator: GHARemediator,
     raw_log_text: str,
-    repo: str,
+    repo: Optional[str],
     replay: bool,
     max_retries: int,
 ) -> Dict[str, Any]:
@@ -125,7 +125,7 @@ def _build_summary(cases: List[Dict[str, Any]]) -> Dict[str, Any]:
 def evaluate_synthetic_dataset(
     *,
     remediator: GHARemediator,
-    repo: str,
+    repo: Optional[str],
     root: str = "dataset/synthetic",
     limit: Optional[int] = None,
     replay: bool = False,

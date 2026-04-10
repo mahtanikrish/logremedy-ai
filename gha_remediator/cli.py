@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 import json
 
 from .evaluation.real_cases import export_real_case_stub
@@ -10,6 +11,9 @@ from .rag import KnowledgeBase, Doc
 from .ingestion.synthetic_loader import load_failure_logs
 from .llm.base import LLMConfig
 from .llm.github_models_client import GitHubModelsClient
+from .remediation.llm_planner import build_planner_user_prompt
+from .repo_context import build_repo_context, format_repo_context
+from . import prompts
 
 
 def _default_kb() -> KnowledgeBase:
@@ -23,13 +27,62 @@ def _default_kb() -> KnowledgeBase:
     ]
     return KnowledgeBase(docs)
 
+def _load_raw_log_text(args) -> str:
+    if args.log:
+        with open(args.log, "r", encoding="utf-8") as f:
+            return f.read()
+
+    logs = load_failure_logs(
+        root=args.synthetic_root,
+        limit=1,
+        with_ground_truth=not getattr(args, "no_ground_truth", False),
+    )
+    if not logs:
+        raise RuntimeError("No synthetic logs found")
+    return logs[0]["content"]
+
+def _write_or_print(payload: dict, out: str | None) -> None:
+    js = json.dumps(payload, indent=2)
+    if out:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(js)
+    else:
+        print(js)
+
+def _inspect_context_payload(raw_log_text: str, repo: str | None) -> dict:
+    remediator = GHARemediator(kb=_default_kb())
+    report = remediator.analyze(raw_log_text)
+    repo_context = build_repo_context(repo=repo, raw_log_text=raw_log_text, report=report)
+    return {
+        "failure_class": report.failure_class,
+        "root_causes": report.root_causes,
+        "repo_context": asdict(repo_context),
+        "repo_context_summary": format_repo_context(repo_context),
+    }
+
+def _debug_plan_input_payload(raw_log_text: str, repo: str | None) -> dict:
+    remediator = GHARemediator(kb=_default_kb())
+    report = remediator.analyze(raw_log_text)
+    docs = remediator.retrieve_knowledge(report, top_k=5)
+    repo_context = build_repo_context(repo=repo, raw_log_text=raw_log_text, report=report)
+    return {
+        "failure_class": report.failure_class,
+        "root_causes": report.root_causes,
+        "retrieved_docs": [{"id": d.doc_id, "title": d.title, "source": d.source} for d in docs],
+        "repo_context": asdict(repo_context),
+        "repo_context_summary": format_repo_context(repo_context),
+        "system_prompt": prompts.PLAN_SYSTEM,
+        "schema_hint": prompts.PLAN_SCHEMA_HINT,
+        "user_prompt": build_planner_user_prompt(report, docs, repo_context),
+    }
+
 def main():
     ap = argparse.ArgumentParser(prog="gha-remediator")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     runp = sub.add_parser("run", help="Run RCA -> remediation -> verification on a log file")
     runp.add_argument("--log", required=True, help="Path to failed log file")
-    runp.add_argument("--repo", required=True, help="Path to repo (for verification checks)")
+    runp.add_argument("--repo", default=None, help="Path to repo (optional; enables repo-aware planning and verification)")
     runp.add_argument("--success-logs-dir", default=None, help="Dir with recent successful logs (optional)")
     runp.add_argument("--replay", action="store_true", help="Attempt sandbox replay using act (if installed)")
     runp.add_argument("--job", default=None, help="Optional job name for act -j <job>")
@@ -45,7 +98,7 @@ def main():
     runp.add_argument("--no-ground-truth", action="store_true", help="Ignore ground truth labels (if present)")
 
     evalp = sub.add_parser("eval-synthetic", help="Run the full pipeline over the synthetic dataset")
-    evalp.add_argument("--repo", required=True, help="Path to repo (for verification checks)")
+    evalp.add_argument("--repo", default=None, help="Path to repo (optional; enables repo-aware planning and verification)")
     evalp.add_argument("--synthetic-root", default="dataset/synthetic", help="Root directory for synthetic logs")
     evalp.add_argument("--limit", type=int, default=None, help="Limit number of logs processed")
     evalp.add_argument("--replay", action="store_true", help="Attempt sandbox replay using act (if installed)")
@@ -67,6 +120,16 @@ def main():
     exportp.add_argument("--temperature", type=float, default=None, help="Optional temperature")
     exportp.add_argument("--max-output-tokens", type=int, default=1200, help="Max output tokens (default 1200)")
 
+    inspectp = sub.add_parser("inspect-context", help="Inspect extracted repo context for a log/repo pair")
+    inspectp.add_argument("--log", required=True, help="Path to failed log file")
+    inspectp.add_argument("--repo", default=None, help="Optional path to repo to scan for context")
+    inspectp.add_argument("--out", default=None, help="Write JSON output to file")
+
+    debugp = sub.add_parser("debug-plan-input", help="Show the planner prompts and inputs for a log/repo pair")
+    debugp.add_argument("--log", required=True, help="Path to failed log file")
+    debugp.add_argument("--repo", default=None, help="Optional path to repo to scan for context")
+    debugp.add_argument("--out", default=None, help="Write JSON output to file")
+
     args = ap.parse_args()
 
     if args.cmd == "export-real-case":
@@ -76,6 +139,16 @@ def main():
             out_dir=args.out_dir,
         )
         print(json.dumps(paths, indent=2))
+        return
+
+    if args.cmd == "inspect-context":
+        payload = _inspect_context_payload(_load_raw_log_text(args), args.repo)
+        _write_or_print(payload, args.out)
+        return
+
+    if args.cmd == "debug-plan-input":
+        payload = _debug_plan_input_payload(_load_raw_log_text(args), args.repo)
+        _write_or_print(payload, args.out)
         return
 
     kb = _default_kb()
@@ -106,18 +179,7 @@ def main():
         print(f"\nWrote detailed report to {args.out}")
         return
 
-    if args.log:
-        with open(args.log, "r", encoding="utf-8") as f:
-            raw_log_text = f.read()
-    else:
-        logs = load_failure_logs(
-            root=args.synthetic_root,
-            limit=1,
-            with_ground_truth=not args.no_ground_truth,
-        )
-        if not logs:
-            raise RuntimeError("No synthetic logs found")
-        raw_log_text = logs[0]["content"]
+    raw_log_text = _load_raw_log_text(args)
 
     result = remediator.run(
         raw_log_text,
@@ -126,13 +188,7 @@ def main():
         job=args.job,
     )
 
-
-    js = json.dumps(result, indent=2)
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as f:
-            f.write(js)
-    else:
-        print(js)
+    _write_or_print(result, args.out)
 
 if __name__ == "__main__":
     main()

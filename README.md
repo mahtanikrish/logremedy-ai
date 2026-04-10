@@ -32,10 +32,14 @@ Raw CI log
 4. BM25 Retrieval         — Lexical retrieval from local knowledge base
     │
     ▼
-5. Remediation Planning   — Template-based (default) or LLM planner with RAG context
+5. Repo Context           — Scan repo tree, detect manifests / lockfiles / workflows,
+                            extract scripts, tool versions, candidate files, snippets
     │
     ▼
-6. Verification Gates     — See below
+6. Remediation Planning   — Template-based (default) or LLM planner with RAG + repo context
+    │
+    ▼
+7. Verification Gates     — See below
     │
     ▼
 Structured JSON output    — rca / remediation / verification
@@ -125,6 +129,50 @@ python -m gha_remediator run \
   --out result.json
 ```
 
+### Inspect extracted repo context
+This command does not call the LLM. It is useful for checking exactly what was detected from the repo before planning.
+
+```bash
+python -m gha_remediator inspect-context \
+  --log examples/failure_module_not_found.log \
+  --repo .
+```
+
+It prints JSON including:
+- `repo_context`
+- `repo_context_summary`
+- detected workflows, manifests, lockfiles, tool versions
+- candidate target files and file snippets
+
+### Inspect the exact planner input
+This command also avoids the LLM call. It shows the prompts and structured inputs that would be sent into remediation planning.
+
+```bash
+python -m gha_remediator debug-plan-input \
+  --log examples/failure_module_not_found.log \
+  --repo .
+```
+
+It prints JSON including:
+- `system_prompt`
+- `schema_hint`
+- `retrieved_docs`
+- `repo_context`
+- `user_prompt`
+
+### Run without a repo
+If `--repo` is omitted, the pipeline still performs RCA and remediation planning, but repo-aware extraction is replaced with a `repo not provided` marker and verification is skipped.
+
+```bash
+python -m gha_remediator run \
+  --log examples/failure_module_not_found.log \
+  --model gpt-4o-mini
+```
+
+Expected verification output in this mode:
+- `status: inconclusive`
+- `reason: verification skipped: repo not provided`
+
 ---
 
 ## Running the Synthetic Dataset
@@ -137,6 +185,8 @@ python -m gha_remediator run \
   --log dataset/synthetic/dependency_errors/missing_module_01.log \
   --repo .
 ```
+
+If you want plan-only synthetic evaluation without a checkout, `--repo` is optional for `run` and `eval-synthetic`. In that mode verification will be reported as skipped / inconclusive.
 
 ---
 
@@ -154,7 +204,9 @@ pytest -v
 
 | Variable | Required for |
 |----------|-------------|
-| `GITHUB_TOKEN` | CLI and web app LLM execution |
+| `GITHUB_TOKEN` | `run`, `eval-synthetic`, `export-real-case`, and web app LLM execution |
+
+`inspect-context` and `debug-plan-input` do not require `GITHUB_TOKEN` because they do not call the model.
 
 ---
 
