@@ -46,6 +46,32 @@ class RCAReport:
     root_causes: List[str]  # natural language
     metadata: Dict[str, Any] = field(default_factory=dict)
 
+@dataclass(frozen=True)
+class RepoCandidateFile:
+    path: str
+    reason: str
+    line_hint: Optional[int] = None
+
+@dataclass(frozen=True)
+class RepoSnippet:
+    path: str
+    reason: str
+    content: str
+
+@dataclass
+class RepoContext:
+    repo_root: str
+    tree_entries: List[str]
+    manifests: List[str]
+    lockfiles: List[str]
+    workflow_files: List[str]
+    package_scripts: Dict[str, Dict[str, str]] = field(default_factory=dict)
+    package_managers: Dict[str, str] = field(default_factory=dict)
+    tool_versions: Dict[str, List[str]] = field(default_factory=dict)
+    candidate_files: List[RepoCandidateFile] = field(default_factory=list)
+    snippets: List[RepoSnippet] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
 @dataclass
 class Patch:
     path: str
