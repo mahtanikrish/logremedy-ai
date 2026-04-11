@@ -77,6 +77,9 @@ def test_cli_inspect_context_outputs_repo_context(monkeypatch, tmp_path, capsys)
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["failure_class"] == "environment_dependency_failure"
+    assert payload["confidence"] is None
+    assert payload["evidence_line_numbers"] == []
+    assert payload["notes"] == []
     assert payload["repo_context"]["workflow_files"] == [".github/workflows/ci.yml"]
     assert payload["repo_context"]["candidate_files"][0]["path"] == "app.py"
     assert "Detected manifests: none" in payload["repo_context_summary"]
@@ -102,6 +105,9 @@ def test_cli_debug_plan_input_outputs_prompt(monkeypatch, tmp_path, capsys):
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["failure_class"] == "environment_dependency_failure"
+    assert payload["confidence"] is None
+    assert payload["evidence_line_numbers"] == []
+    assert payload["notes"] == []
     assert "Repository context:" in payload["user_prompt"]
     assert ".github/workflows/ci.yml" in payload["user_prompt"]
     assert "app.py" in payload["user_prompt"]

@@ -90,6 +90,9 @@ class GHARemediator:
             "rca": {
                 "failure_class": report.failure_class,
                 "root_causes": report.root_causes,
+                "confidence": report.confidence,
+                "evidence_line_numbers": report.evidence_line_numbers,
+                "notes": report.notes,
                 "metadata": report.metadata,
                 "key_lines": [asdict(l) for l in report.key_lines[:30]],
                 "blocks": [{"start": b.start, "end": b.end, "weight_density": b.weight_density} for b in report.blocks],

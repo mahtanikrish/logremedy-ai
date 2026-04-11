@@ -56,6 +56,9 @@ def _inspect_context_payload(raw_log_text: str, repo: str | None) -> dict:
     return {
         "failure_class": report.failure_class,
         "root_causes": report.root_causes,
+        "confidence": report.confidence,
+        "evidence_line_numbers": report.evidence_line_numbers,
+        "notes": report.notes,
         "repo_context": asdict(repo_context),
         "repo_context_summary": format_repo_context(repo_context),
     }
@@ -68,6 +71,9 @@ def _debug_plan_input_payload(raw_log_text: str, repo: str | None) -> dict:
     return {
         "failure_class": report.failure_class,
         "root_causes": report.root_causes,
+        "confidence": report.confidence,
+        "evidence_line_numbers": report.evidence_line_numbers,
+        "notes": report.notes,
         "retrieved_docs": [{"id": d.doc_id, "title": d.title, "source": d.source} for d in docs],
         "repo_context": asdict(repo_context),
         "repo_context_summary": format_repo_context(repo_context),
