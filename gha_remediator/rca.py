@@ -9,6 +9,33 @@ from .logs import to_lines, build_success_templates
 from .llm.base import LLMClient, LLMConfig
 from . import prompts
 
+
+def _normalise_confidence(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalise_line_numbers(values: Any) -> List[int]:
+    if not isinstance(values, list):
+        return []
+    out: List[int] = []
+    for value in values:
+        try:
+            out.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
+def _normalise_notes(values: Any) -> List[str]:
+    if not isinstance(values, list):
+        return []
+    return [str(value) for value in values if str(value).strip()]
+
 def heuristic_root_cause(failure_class: str, key_lines: List[LogLine]) -> List[str]:
     text = "\n".join(l.text for l in key_lines).lower()
     if failure_class == "environment_dependency_failure":
@@ -48,7 +75,16 @@ def run_rca(raw_log_text: str, success_log_texts: Optional[List[str]] = None, cf
     if llm is None:
         causes = heuristic_root_cause(failure_class, key_lines[:50])
         meta["rca_mode"] = "heuristic"
-        return RCAReport(failure_class=failure_class, key_lines=key_lines[:200], blocks=blocks, root_causes=causes, metadata=meta)
+        return RCAReport(
+            failure_class=failure_class,
+            key_lines=key_lines[:200],
+            blocks=blocks,
+            root_causes=causes,
+            confidence=None,
+            evidence_line_numbers=[],
+            notes=[],
+            metadata=meta,
+        )
 
     llm_cfg = llm_cfg or LLMConfig()
     user = (
@@ -62,14 +98,21 @@ def run_rca(raw_log_text: str, success_log_texts: Optional[List[str]] = None, cf
         cfg=llm_cfg,
     )
     causes = [str(x) for x in out.get("root_causes", [])][:5] or ["(LLM did not provide root_causes)"]
+    confidence = _normalise_confidence(out.get("confidence"))
+    evidence_line_numbers = _normalise_line_numbers(out.get("evidence_line_numbers"))
+    notes = _normalise_notes(out.get("notes"))
     meta["rca_mode"] = "llm"
-    meta["llm_confidence"] = out.get("confidence")
-    meta["evidence_line_numbers"] = out.get("evidence_line_numbers")
+    meta["llm_confidence"] = confidence
+    meta["evidence_line_numbers"] = evidence_line_numbers
+    meta["notes"] = notes
 
     return RCAReport(
         failure_class=failure_class,
         key_lines=key_lines[:200],
         blocks=blocks,
         root_causes=causes,
+        confidence=confidence,
+        evidence_line_numbers=evidence_line_numbers,
+        notes=notes,
         metadata=meta,
     )

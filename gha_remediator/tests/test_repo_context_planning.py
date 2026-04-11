@@ -227,6 +227,7 @@ class _PipelineLLM:
                 "root_causes": ["Missing import path in the frontend build."],
                 "confidence": 0.92,
                 "evidence_line_numbers": [2],
+                "notes": ["The source file imports a path that resolves inside src/utils."],
             }
         return {
             "fix_type": "llm_plan",
@@ -252,6 +253,9 @@ def test_pipeline_run_builds_repo_context_before_planning(tmp_path):
     result = remediator.run(raw_log_text=raw_log, repo=str(tmp_path), replay=False, job=None)
 
     assert result["verification"]["status"] == "inconclusive"
+    assert result["rca"]["confidence"] == 0.92
+    assert result["rca"]["evidence_line_numbers"] == [2]
+    assert result["rca"]["notes"] == ["The source file imports a path that resolves inside src/utils."]
     repo_context = result["remediation"]["evidence"]["repo_context"]
     assert any(item["path"] == "frontend/src/index.ts" for item in repo_context["candidate_files"])
     assert any(item["path"] == "frontend/src/utils/helper.ts" for item in repo_context["candidate_files"])
