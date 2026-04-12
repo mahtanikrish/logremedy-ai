@@ -135,6 +135,44 @@ def test_build_repo_context_extracts_repo_summary_and_candidates(tmp_path):
     }
 
 
+def test_build_repo_context_preserves_missing_repo_relative_targets(tmp_path):
+    _write(
+        tmp_path / "docs" / "package.json",
+        "\n".join(
+            [
+                "{",
+                '  "name": "docs",',
+                '  "scripts": {',
+                '    "build": "vitepress build"',
+                "  }",
+                "}",
+            ]
+        ),
+    )
+    _write(tmp_path / "docs" / "package-lock.json", '{ "name": "docs" }')
+    _write(
+        tmp_path / "docs" / "ar-SA" / "presets" / "catppuccin-powerline.md",
+        "# Preset\n\n```toml\n@include public/presets/toml/catppuccin-powerline.toml\n```\n",
+    )
+    (tmp_path / "docs" / "public" / "presets" / "toml").mkdir(parents=True, exist_ok=True)
+
+    raw_log = "\n".join(
+        [
+            "build error:",
+            "[vitepress] ENOENT: no such file or directory, stat '/home/runner/work/starship/starship/docs/public/presets/toml/catppuccin-powerline.toml'",
+            "file: /home/runner/work/starship/starship/docs/ar-SA/presets/catppuccin-powerline.md",
+        ]
+    )
+    report = _make_report("build_failure", raw_log.splitlines())
+
+    repo_context = build_repo_context(str(tmp_path), raw_log, report)
+
+    candidate_paths = {candidate.path for candidate in repo_context.candidate_files}
+    assert "docs/public/presets/toml/catppuccin-powerline.toml" in candidate_paths
+    assert "docs/ar-SA/presets/catppuccin-powerline.md" in candidate_paths
+    assert "docs/public/presets/toml/catppuccin-powerline.toml" in repo_context.tree_entries
+
+
 class _CapturePlannerLLM:
     def __init__(self):
         self.calls = []

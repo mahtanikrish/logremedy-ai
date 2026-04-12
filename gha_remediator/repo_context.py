@@ -53,6 +53,8 @@ TEXT_SNIPPET_SUFFIXES = {
     ".json",
     ".jsx",
     ".kt",
+    ".md",
+    ".mdx",
     ".mjs",
     ".php",
     ".py",
@@ -102,12 +104,12 @@ MAX_SNIPPET_LINES = 24
 
 _PY_TRACEBACK_RE = re.compile(r'File ["\'](?P<path>[^"\']+)["\'], line (?P<line>\d+)')
 _LINE_COL_RE = re.compile(
-    r"(?P<path>[A-Za-z0-9_./-]+\.(?:py|js|jsx|ts|tsx|json|ya?ml|toml|cfg|ini|sh))"
+    r"(?P<path>[A-Za-z0-9_./-]+\.(?:py|js|jsx|ts|tsx|json|ya?ml|toml|cfg|ini|sh|md|mdx))"
     r"(?:\(|:)(?P<line>\d+)(?:[:,](?P<col>\d+))?\)?"
 )
 _GENERIC_PATH_RE = re.compile(
     r"(?<![\w./-])(?P<path>(?:\.{1,2}/)?[A-Za-z0-9_./-]+(?:/[A-Za-z0-9_./-]+)*"
-    r"\.(?:py|js|jsx|ts|tsx|json|ya?ml|toml|cfg|ini|sh))(?![\w.-])"
+    r"\.(?:py|js|jsx|ts|tsx|json|ya?ml|toml|cfg|ini|sh|md|mdx))(?![\w.-])"
 )
 _IMPORT_FROM_SOURCE_RE = re.compile(
     r"Cannot find module ['\"](?P<import>[^'\"]+)['\"] from ['\"](?P<source>[^'\"]+)['\"]",
@@ -164,6 +166,7 @@ def build_repo_context(repo: Optional[str], raw_log_text: str, report: RCAReport
 
     repo_files, scan_meta = _scan_repo_files(root)
     repo_files_set = set(repo_files)
+    repo_dirs_set = _build_repo_dirs(root)
 
     manifests = [path for path in repo_files if Path(path).name in MANIFEST_BASENAMES]
     lockfiles = [path for path in repo_files if Path(path).name in LOCKFILE_BASENAMES]
@@ -174,7 +177,7 @@ def build_repo_context(repo: Optional[str], raw_log_text: str, report: RCAReport
     ]
     package_scripts, package_managers = _extract_package_json_details(root, manifests)
     tool_versions = _extract_tool_versions(root, workflow_files, manifests, package_managers)
-    candidate_files = _extract_candidate_files(raw_log_text, repo_files_set)
+    candidate_files = _extract_candidate_files(raw_log_text, repo_files_set, repo_dirs_set)
     tree_entries = _build_tree_sample(repo_files, manifests, lockfiles, workflow_files, candidate_files)
     snippets = _select_snippets(
         root=root,
@@ -335,6 +338,26 @@ def _scan_repo_files(root: Path) -> tuple[List[str], Dict[str, int | bool]]:
     return repo_files, {"scanned_files": len(repo_files), "scan_truncated": truncated}
 
 
+def _build_repo_dirs(root: Path) -> set[str]:
+    repo_dirs = {"."}
+    for current_root, dirnames, _filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if d not in IGNORED_DIRS)
+        current_path = Path(current_root)
+        try:
+            relative = current_path.relative_to(root).as_posix()
+        except ValueError:
+            continue
+        repo_dirs.add(relative or ".")
+        for dirname in dirnames:
+            child = current_path / dirname
+            try:
+                child_relative = child.relative_to(root).as_posix()
+            except ValueError:
+                continue
+            repo_dirs.add(child_relative)
+    return repo_dirs
+
+
 def _extract_package_json_details(
     root: Path,
     manifests: Sequence[str],
@@ -432,7 +455,11 @@ def _extract_tool_versions(
     return {tool: _dedupe_preserve_order(values) for tool, values in tool_versions.items()}
 
 
-def _extract_candidate_files(raw_log_text: str, repo_files_set: set[str]) -> List[RepoCandidateFile]:
+def _extract_candidate_files(
+    raw_log_text: str,
+    repo_files_set: set[str],
+    repo_dirs_set: set[str],
+) -> List[RepoCandidateFile]:
     found: Dict[str, RepoCandidateFile] = {}
 
     def add(path: Optional[str], reason: str, line_hint: Optional[int] = None) -> None:
@@ -450,63 +477,77 @@ def _extract_candidate_files(raw_log_text: str, repo_files_set: set[str]) -> Lis
         )
 
     for match in _PY_TRACEBACK_RE.finditer(raw_log_text):
-        resolved = _resolve_logged_path(match.group("path"), repo_files_set)
+        resolved = _resolve_logged_path(match.group("path"), repo_files_set, repo_dirs_set)
         add(resolved, "python traceback location", line_hint=int(match.group("line")))
 
     source_files: List[str] = []
     for match in _LINE_COL_RE.finditer(raw_log_text):
-        resolved = _resolve_logged_path(match.group("path"), repo_files_set)
+        resolved = _resolve_logged_path(match.group("path"), repo_files_set, repo_dirs_set)
         if not resolved:
             continue
         source_files.append(resolved)
         add(resolved, "error location from log", line_hint=int(match.group("line")))
 
     for match in _GENERIC_PATH_RE.finditer(raw_log_text):
-        resolved = _resolve_logged_path(match.group("path"), repo_files_set)
+        resolved = _resolve_logged_path(match.group("path"), repo_files_set, repo_dirs_set)
         if resolved:
             source_files.append(resolved)
             add(resolved, "path referenced in log")
 
     for match in _IMPORT_FROM_SOURCE_RE.finditer(raw_log_text):
-        source = _resolve_logged_path(match.group("source"), repo_files_set)
+        source = _resolve_logged_path(match.group("source"), repo_files_set, repo_dirs_set)
         if source:
             source_files.append(source)
             add(source, "import error source file")
-        resolved_import = _resolve_import_path(match.group("import"), source, repo_files_set)
+        resolved_import = _resolve_import_path(match.group("import"), source, repo_files_set, repo_dirs_set)
         add(resolved_import, f"resolved import path {match.group('import')!r}")
 
     for match in _TS_IMPORT_ERROR_RE.finditer(raw_log_text):
-        source = _resolve_logged_path(match.group("source"), repo_files_set)
+        source = _resolve_logged_path(match.group("source"), repo_files_set, repo_dirs_set)
         if source:
             source_files.append(source)
             add(source, "TypeScript import error source", line_hint=int(match.group("line")))
-        resolved_import = _resolve_import_path(match.group("import"), source, repo_files_set)
+        resolved_import = _resolve_import_path(match.group("import"), source, repo_files_set, repo_dirs_set)
         add(resolved_import, f"resolved import path {match.group('import')!r}")
 
     for source in list(_dedupe_preserve_order(source_files))[:10]:
         for import_match in re.finditer(r"['\"](\.{1,2}/[^'\"]+|[A-Za-z0-9_./-]+/[A-Za-z0-9_./-]+)['\"]", raw_log_text):
-            resolved_import = _resolve_import_path(import_match.group(1), source, repo_files_set)
+            resolved_import = _resolve_import_path(
+                import_match.group(1),
+                source,
+                repo_files_set,
+                repo_dirs_set,
+            )
             add(resolved_import, f"possible import path {import_match.group(1)!r} near {source}")
 
     return sorted(found.values(), key=lambda item: item.path)[:12]
 
 
-def _resolve_logged_path(raw_path: str, repo_files_set: set[str]) -> Optional[str]:
+def _resolve_logged_path(
+    raw_path: str,
+    repo_files_set: set[str],
+    repo_dirs_set: set[str],
+) -> Optional[str]:
     cleaned = raw_path.strip().replace("\\", "/")
     if not cleaned or cleaned.startswith(("http://", "https://")):
         return None
 
-    posix_path = PurePosixPath(cleaned).as_posix()
-    if posix_path in repo_files_set:
-        return posix_path
-    if posix_path.startswith("./") and posix_path[2:] in repo_files_set:
-        return posix_path[2:]
-    if posix_path.startswith("/") and posix_path[1:] in repo_files_set:
-        return posix_path[1:]
+    absolute_path = cleaned.startswith("/")
+    for candidate in _repo_relative_candidates(cleaned):
+        if candidate in repo_files_set:
+            return candidate
+    for candidate in _repo_relative_candidates(cleaned):
+        if _is_plausible_missing_repo_path(candidate, repo_dirs_set, absolute_path=absolute_path):
+            return candidate
     return None
 
 
-def _resolve_import_path(import_path: str, source_path: Optional[str], repo_files_set: set[str]) -> Optional[str]:
+def _resolve_import_path(
+    import_path: str,
+    source_path: Optional[str],
+    repo_files_set: set[str],
+    repo_dirs_set: set[str],
+) -> Optional[str]:
     cleaned = import_path.strip().replace("\\", "/")
     if not cleaned or cleaned.startswith(("@", "#")):
         return None
@@ -522,7 +563,37 @@ def _resolve_import_path(import_path: str, source_path: Optional[str], repo_file
         normalized = PurePosixPath(candidate).as_posix()
         if normalized in repo_files_set:
             return normalized
+    for candidate in candidates:
+        normalized = PurePosixPath(candidate).as_posix()
+        if _is_plausible_missing_repo_path(normalized, repo_dirs_set, absolute_path=False):
+            return normalized
     return None
+
+
+def _repo_relative_candidates(path: str) -> List[str]:
+    normalized = PurePosixPath(path).as_posix()
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    if normalized.startswith("/"):
+        normalized = normalized[1:]
+    if not normalized:
+        return []
+
+    parts = [part for part in PurePosixPath(normalized).parts if part not in {"", "."}]
+    candidates = ["/".join(parts[index:]) for index in range(len(parts))]
+    return _dedupe_preserve_order(candidate for candidate in candidates if candidate)
+
+
+def _is_plausible_missing_repo_path(
+    path: str,
+    repo_dirs_set: set[str],
+    *,
+    absolute_path: bool,
+) -> bool:
+    parent = PurePosixPath(path).parent.as_posix()
+    if parent in {"", "."}:
+        return not absolute_path
+    return parent in repo_dirs_set
 
 
 def _expand_import_candidates(path_without_suffix: str) -> Iterable[str]:
