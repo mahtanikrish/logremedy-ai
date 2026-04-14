@@ -44,6 +44,8 @@ class RCAReport:
     key_lines: List[LogLine]
     blocks: List[LogBlock]
     root_causes: List[str]  # natural language
+    root_cause_label: Optional[str] = None
+    root_cause_text: Optional[str] = None
     confidence: Optional[float] = None
     evidence_line_numbers: List[int] = field(default_factory=list)
     notes: List[str] = field(default_factory=list)

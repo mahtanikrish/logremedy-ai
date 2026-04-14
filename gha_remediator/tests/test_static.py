@@ -1,9 +1,9 @@
 from gha_remediator.verification.static_checks import basic_static_validation, file_exists
 
 
-def test_non_workflow_file_skipped(tmp_path):
-    """Non-workflow files produce no checks (nothing to validate statically)."""
-    result = basic_static_validation(str(tmp_path), ["foo.py"])
+def test_non_supported_file_skipped(tmp_path):
+    """Unsupported file extensions produce no static checks."""
+    result = basic_static_validation(str(tmp_path), ["foo.txt"])
     assert result["checks"] == []
 
 
@@ -32,6 +32,42 @@ def test_valid_workflow_yaml_passes(tmp_path):
     result = basic_static_validation(str(tmp_path), [".github/workflows/ci.yml"])
     checks = result["checks"]
     assert len(checks) == 1
+    assert checks[0]["ok"] is True
+
+
+def test_valid_python_file_passes(tmp_path):
+    py_file = tmp_path / "conf.py"
+    py_file.write_text("value = 1\n", encoding="utf-8")
+
+    result = basic_static_validation(str(tmp_path), ["conf.py"])
+    checks = result["checks"]
+
+    assert len(checks) == 1
+    assert checks[0]["type"] == "python_compile"
+    assert checks[0]["ok"] is True
+
+
+def test_invalid_python_file_fails(tmp_path):
+    py_file = tmp_path / "conf.py"
+    py_file.write_text("if True print('broken')\n", encoding="utf-8")
+
+    result = basic_static_validation(str(tmp_path), ["conf.py"])
+    checks = result["checks"]
+
+    assert len(checks) == 1
+    assert checks[0]["type"] == "python_compile"
+    assert checks[0]["ok"] is False
+
+
+def test_valid_json_file_passes(tmp_path):
+    json_file = tmp_path / "package.json"
+    json_file.write_text('{"name": "demo"}\n', encoding="utf-8")
+
+    result = basic_static_validation(str(tmp_path), ["package.json"])
+    checks = result["checks"]
+
+    assert len(checks) == 1
+    assert checks[0]["type"] == "json_parse"
     assert checks[0]["ok"] is True
 
 

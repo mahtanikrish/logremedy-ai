@@ -5,10 +5,16 @@ from .types import LogBlock
 
 RCA_SYSTEM = """You are an expert DevOps incident analyst for GitHub Actions.
 You will be given curated log evidence blocks (already filtered + expanded + pruned).
-Your job: produce a concise, structured root-cause analysis (RCA) grounded in the evidence."""
+Your job: produce a concise, structured root-cause analysis (RCA) grounded in the evidence.
+Always include:
+- root_cause_label: a concise snake_case canonical label for the underlying failure mechanism
+- root_cause_text: one short sentence naming the primary root cause
+Avoid vague labels like generic_failure when the logs support something more specific."""
 
 RCA_SCHEMA_HINT = """{
   \"failure_class\": \"environment_dependency_failure|test_failure|build_failure|workflow_configuration_error|infrastructure_failure|unknown_failure\",
+  \"root_cause_label\": \"snake_case_string\",
+  \"root_cause_text\": \"string\",
   \"root_causes\": [\"string\"],
   \"confidence\": 0.0,
   \"evidence_line_numbers\": [1],

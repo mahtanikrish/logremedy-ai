@@ -77,6 +77,8 @@ def test_cli_inspect_context_outputs_repo_context(monkeypatch, tmp_path, capsys)
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["failure_class"] == "environment_dependency_failure"
+    assert payload["root_cause_label"] == "missing_python_dependency"
+    assert payload["root_cause_text"] == "Missing Python dependency (module import failed)."
     assert payload["confidence"] is None
     assert payload["evidence_line_numbers"] == []
     assert payload["notes"] == []
@@ -105,6 +107,8 @@ def test_cli_debug_plan_input_outputs_prompt(monkeypatch, tmp_path, capsys):
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["failure_class"] == "environment_dependency_failure"
+    assert payload["root_cause_label"] == "missing_python_dependency"
+    assert payload["root_cause_text"] == "Missing Python dependency (module import failed)."
     assert payload["confidence"] is None
     assert payload["evidence_line_numbers"] == []
     assert payload["notes"] == []

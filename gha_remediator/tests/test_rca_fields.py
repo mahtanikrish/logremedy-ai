@@ -12,6 +12,8 @@ class _RcaStructuredLLM:
         self.calls.append({"system": system, "user": user, "schema_hint": schema_hint})
         if system == prompts.RCA_SYSTEM:
             return {
+                "root_cause_label": "missing_dependency_in_ci_environment",
+                "root_cause_text": "Missing dependency in CI environment.",
                 "root_causes": ["Missing dependency in CI environment."],
                 "confidence": 0.87,
                 "evidence_line_numbers": [3, 5],
@@ -45,10 +47,14 @@ def test_run_rca_preserves_structured_llm_fields():
 
     report = run_rca(_raw_log(), llm=llm)
 
+    assert report.root_cause_label == "missing_dependency_in_ci_environment"
+    assert report.root_cause_text == "Missing dependency in CI environment."
     assert report.root_causes == ["Missing dependency in CI environment."]
     assert report.confidence == 0.87
     assert report.evidence_line_numbers == [3, 5]
     assert report.notes == ["requests is imported before installation."]
+    assert report.metadata["root_cause_label"] == "missing_dependency_in_ci_environment"
+    assert report.metadata["root_cause_text"] == "Missing dependency in CI environment."
     assert report.metadata["llm_confidence"] == 0.87
     assert report.metadata["evidence_line_numbers"] == [3, 5]
     assert report.metadata["notes"] == ["requests is imported before installation."]
@@ -60,6 +66,8 @@ def test_pipeline_output_includes_structured_rca_fields():
 
     result = remediator.run(raw_log_text=_raw_log(), repo=None, replay=False, job=None)
 
+    assert result["rca"]["root_cause_label"] == "missing_dependency_in_ci_environment"
+    assert result["rca"]["root_cause_text"] == "Missing dependency in CI environment."
     assert result["rca"]["confidence"] == 0.87
     assert result["rca"]["evidence_line_numbers"] == [3, 5]
     assert result["rca"]["notes"] == ["requests is imported before installation."]

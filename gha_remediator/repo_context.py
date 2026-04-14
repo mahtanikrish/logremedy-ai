@@ -278,6 +278,23 @@ def format_repo_context(repo_context: RepoContext, max_chars: int = 8_000) -> st
 def detect_primary_package_manager(repo_context: Optional[RepoContext]) -> Optional[str]:
     if repo_context is None:
         return None
+    manifest = preferred_node_manifest(repo_context)
+    if manifest and manifest in repo_context.package_managers:
+        return repo_context.package_managers[manifest]
+
+    workspace = preferred_node_workspace(repo_context)
+    if workspace is not None:
+        for path in repo_context.lockfiles:
+            parent = PurePosixPath(path).parent.as_posix()
+            if parent != workspace:
+                continue
+            if path.endswith("pnpm-lock.yaml"):
+                return "pnpm"
+            if path.endswith("yarn.lock"):
+                return "yarn"
+            if path.endswith(("package-lock.json", "npm-shrinkwrap.json")):
+                return "npm"
+
     managers = repo_context.package_managers.values()
     if any(manager == "pnpm" for manager in managers):
         return "pnpm"
@@ -314,6 +331,59 @@ def primary_python_manifest(repo_context: Optional[RepoContext]) -> Optional[str
         if name in manifest_names:
             return manifest_names[name]
     return None
+
+
+def preferred_node_manifest(repo_context: Optional[RepoContext]) -> Optional[str]:
+    if repo_context is None:
+        return None
+
+    candidates = _dedupe_preserve_order(
+        list(repo_context.package_scripts.keys())
+        + [path for path in repo_context.manifests if Path(path).name == "package.json"]
+    )
+    if not candidates:
+        return None
+
+    def manifest_score(path: str) -> tuple[int, int, str]:
+        workspace = PurePosixPath(path).parent.as_posix()
+        normalized_workspace = "" if workspace == "." else workspace
+        score = 0
+        if path in repo_context.package_scripts:
+            score += 4
+        if any(PurePosixPath(lockfile).parent.as_posix() == workspace for lockfile in repo_context.lockfiles):
+            score += 2
+        for candidate in repo_context.candidate_files:
+            if candidate.path == path:
+                score += 6
+            elif normalized_workspace and candidate.path.startswith(f"{normalized_workspace}/"):
+                score += 5
+            elif not normalized_workspace and "/" not in candidate.path:
+                score += 3
+        return (score, len(PurePosixPath(path).parts), path)
+
+    return max(candidates, key=manifest_score)
+
+
+def preferred_node_workspace(repo_context: Optional[RepoContext]) -> Optional[str]:
+    manifest = preferred_node_manifest(repo_context)
+    if manifest is None:
+        return None
+    parent = PurePosixPath(manifest).parent.as_posix()
+    return "." if parent == "." else parent
+
+
+def preferred_node_lockfiles(repo_context: Optional[RepoContext]) -> List[str]:
+    if repo_context is None:
+        return []
+    workspace = preferred_node_workspace(repo_context)
+    if workspace is None:
+        return []
+    lockfiles = [
+        path
+        for path in repo_context.lockfiles
+        if PurePosixPath(path).parent.as_posix() == workspace
+    ]
+    return sorted(lockfiles)
 
 
 def _scan_repo_files(root: Path) -> tuple[List[str], Dict[str, int | bool]]:

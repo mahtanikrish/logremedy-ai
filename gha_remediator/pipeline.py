@@ -11,6 +11,7 @@ from .remediation.llm_planner import plan_with_llm
 from .repo_context import build_repo_context
 from .verification.verify import verify_plan
 from .verification.replay import ReplayConfig
+from .verification.policy import VerificationProfile
 from .types import RCAReport, RemediationPlan, RepoContext, VerificationResult
 from .llm.base import LLMClient, LLMConfig
 
@@ -59,12 +60,30 @@ class GHARemediator:
             plan.evidence["repo_context"] = asdict(repo_context)
         return plan
 
-    def verify(self, plan: RemediationPlan, repo: Optional[str], replay: bool = False, job: Optional[str] = None) -> VerificationResult:
+    def verify(
+        self,
+        plan: RemediationPlan,
+        repo: Optional[str],
+        replay: bool = False,
+        job: Optional[str] = None,
+        verification_profile: VerificationProfile = "strict",
+    ) -> VerificationResult:
         if repo is None or not str(repo).strip():
             return VerificationResult(
                 status="inconclusive",
                 reason="verification skipped: repo not provided",
-                evidence={"gate": "preconditions", "repo_provided": False},
+                evidence={
+                    "gate": "preconditions",
+                    "repo_provided": False,
+                    "gates": [
+                        {
+                            "name": "preconditions",
+                            "status": "failed",
+                            "reason": "verification skipped: repo not provided",
+                            "details": {"repo_provided": False},
+                        }
+                    ],
+                },
             )
 
         repo_path = Path(repo).expanduser()
@@ -72,23 +91,56 @@ class GHARemediator:
             return VerificationResult(
                 status="inconclusive",
                 reason=f"verification skipped: repo does not exist: {repo}",
-                evidence={"gate": "preconditions", "repo_provided": True, "repo_exists": False},
+                evidence={
+                    "gate": "preconditions",
+                    "repo_provided": True,
+                    "repo_exists": False,
+                    "gates": [
+                        {
+                            "name": "preconditions",
+                            "status": "failed",
+                            "reason": f"verification skipped: repo does not exist: {repo}",
+                            "details": {"repo_provided": True, "repo_exists": False},
+                        }
+                    ],
+                },
             )
 
         replay_cfg = None
         if replay:
             replay_cfg = ReplayConfig(job=job)
-        return verify_plan(plan, repo=str(repo_path), replay_cfg=replay_cfg)
+        return verify_plan(
+            plan,
+            repo=str(repo_path),
+            replay_cfg=replay_cfg,
+            verification_profile=verification_profile,
+        )
 
-    def run(self, raw_log_text: str, repo: Optional[str], success_logs: Optional[List[str]] = None, replay: bool = False, job: Optional[str] = None) -> Dict[str, Any]:
+    def run(
+        self,
+        raw_log_text: str,
+        repo: Optional[str],
+        success_logs: Optional[List[str]] = None,
+        replay: bool = False,
+        job: Optional[str] = None,
+        verification_profile: VerificationProfile = "strict",
+    ) -> Dict[str, Any]:
         report = self.analyze(raw_log_text, success_logs=success_logs)
         docs = self.retrieve_knowledge(report, top_k=5)
         repo_context = build_repo_context(repo=repo, raw_log_text=raw_log_text, report=report)
         plan = self.propose_fix(report, docs=docs, repo_context=repo_context)
-        ver = self.verify(plan, repo=repo, replay=replay, job=job)
+        ver = self.verify(
+            plan,
+            repo=repo,
+            replay=replay,
+            job=job,
+            verification_profile=verification_profile,
+        )
         return {
             "rca": {
                 "failure_class": report.failure_class,
+                "root_cause_label": report.root_cause_label,
+                "root_cause_text": report.root_cause_text,
                 "root_causes": report.root_causes,
                 "confidence": report.confidence,
                 "evidence_line_numbers": report.evidence_line_numbers,

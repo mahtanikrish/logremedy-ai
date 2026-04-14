@@ -11,6 +11,7 @@ import requests
 from ..ingestion.synthetic_loader import load_failure_logs
 from ..pipeline import GHARemediator
 from ..types import FailureClass
+from ..verification.policy import VerificationProfile
 
 
 _FAILURE_TYPE_MAP = {
@@ -61,6 +62,7 @@ def _run_case_with_retries(
     repo: Optional[str],
     replay: bool,
     max_retries: int,
+    verification_profile: VerificationProfile,
 ) -> Dict[str, Any]:
     last_error: Optional[Exception] = None
     attempts = max(1, max_retries + 1)
@@ -71,13 +73,22 @@ def _run_case_with_retries(
                 repo=repo,
                 replay=replay,
                 job=None,
+                verification_profile=verification_profile,
             )
         except requests.HTTPError as e:
             last_error = e
             status_code = getattr(getattr(e, "response", None), "status_code", None)
             if status_code != 429 or attempt == attempts - 1:
                 raise
-            time.sleep(min(30, 2 ** attempt))
+            retry_after = getattr(getattr(e, "response", None), "headers", {}).get("Retry-After")
+            if retry_after is not None:
+                try:
+                    delay_seconds = float(retry_after)
+                except ValueError:
+                    delay_seconds = 0.0
+            else:
+                delay_seconds = min(60.0, 5.0 * (2 ** attempt))
+            time.sleep(delay_seconds)
         except Exception as e:
             last_error = e
             if attempt == attempts - 1:
@@ -132,6 +143,7 @@ def evaluate_synthetic_dataset(
     sleep_seconds: float = 0.0,
     max_retries: int = 2,
     existing_report: Optional[Dict[str, Any]] = None,
+    verification_profile: VerificationProfile = "strict",
 ) -> Dict[str, Any]:
     logs = load_failure_logs(root=root, limit=limit, with_ground_truth=True)
     prior_cases = list((existing_report or {}).get("cases", []))
@@ -154,6 +166,7 @@ def evaluate_synthetic_dataset(
                 repo=repo,
                 replay=replay,
                 max_retries=max_retries,
+                verification_profile=verification_profile,
             )
             expected_class = expected_failure_class(ground_truth)
             predicted_class = result["rca"]["failure_class"]

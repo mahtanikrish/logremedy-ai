@@ -5,18 +5,44 @@ function sentenceCase(value) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function formatInline(value) {
+  if (Array.isArray(value)) {
+    if (!value.length) {
+      return "None";
+    }
+    if (value.every((item) => item && typeof item === "object")) {
+      return value.map((item) => `{ ${formatObject(item)} }`).join("; ");
+    }
+    return value.join(", ");
+  }
+  if (value && typeof value === "object") {
+    return formatObject(value);
+  }
+  return String(value);
+}
+
+function formatObject(value) {
+  return Object.entries(value || {})
+    .map(([innerKey, innerValue]) => `${sentenceCase(innerKey)}: ${formatInline(innerValue)}`)
+    .join(", ");
+}
+
 function flattenEvidence(evidence) {
-  return Object.entries(evidence || {}).map(([key, value]) => {
+  return Object.entries(evidence || {}).flatMap(([key, value]) => {
     if (Array.isArray(value)) {
-      return `${sentenceCase(key)}: ${value.length ? value.join(", ") : "None"}`;
+      if (!value.length) {
+        return [`${sentenceCase(key)}: None`];
+      }
+      if (value.every((item) => item && typeof item === "object")) {
+        return value.map((item) => `${sentenceCase(key)}: ${formatObject(item)}`);
+      }
+      return [`${sentenceCase(key)}: ${value.join(", ")}`];
     }
     if (value && typeof value === "object") {
-      const rendered = Object.entries(value)
-        .map(([innerKey, innerValue]) => `${innerKey}: ${innerValue}`)
-        .join(", ");
-      return `${sentenceCase(key)}: ${rendered || "None"}`;
+      const rendered = formatObject(value);
+      return [`${sentenceCase(key)}: ${rendered || "None"}`];
     }
-    return `${sentenceCase(key)}: ${String(value)}`;
+    return [`${sentenceCase(key)}: ${String(value)}`];
   });
 }
 
