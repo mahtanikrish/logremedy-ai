@@ -12,6 +12,7 @@ from .repo_context import build_repo_context
 from .verification.verify import verify_plan
 from .verification.replay import ReplayConfig
 from .verification.policy import VerificationProfile
+from .verification.capability import early_exit_capability
 from .types import RCAReport, RemediationPlan, RepoContext, VerificationResult
 from .llm.base import LLMClient, LLMConfig
 
@@ -64,6 +65,8 @@ class GHARemediator:
         self,
         plan: RemediationPlan,
         repo: Optional[str],
+        report: Optional[RCAReport] = None,
+        repo_context: Optional[RepoContext] = None,
         replay: bool = False,
         job: Optional[str] = None,
         verification_profile: VerificationProfile = "strict",
@@ -74,6 +77,10 @@ class GHARemediator:
                 reason="verification skipped: repo not provided",
                 evidence={
                     "gate": "preconditions",
+                    "capability": early_exit_capability(
+                        summary="verification skipped because repo was not provided",
+                        outcome="inconclusive",
+                    ),
                     "repo_provided": False,
                     "gates": [
                         {
@@ -93,6 +100,10 @@ class GHARemediator:
                 reason=f"verification skipped: repo does not exist: {repo}",
                 evidence={
                     "gate": "preconditions",
+                    "capability": early_exit_capability(
+                        summary="verification skipped because repo does not exist",
+                        outcome="inconclusive",
+                    ),
                     "repo_provided": True,
                     "repo_exists": False,
                     "gates": [
@@ -114,6 +125,8 @@ class GHARemediator:
             repo=str(repo_path),
             replay_cfg=replay_cfg,
             verification_profile=verification_profile,
+            report=report,
+            repo_context=repo_context,
         )
 
     def run(
@@ -132,6 +145,8 @@ class GHARemediator:
         ver = self.verify(
             plan,
             repo=repo,
+            report=report,
+            repo_context=repo_context,
             replay=replay,
             job=job,
             verification_profile=verification_profile,

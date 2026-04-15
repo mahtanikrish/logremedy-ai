@@ -290,7 +290,7 @@ def test_pipeline_run_builds_repo_context_before_planning(tmp_path):
 
     result = remediator.run(raw_log_text=raw_log, repo=str(tmp_path), replay=False, job=None)
 
-    assert result["verification"]["status"] == "inconclusive"
+    assert result["verification"]["status"] == "accepted"
     assert result["rca"]["confidence"] == 0.92
     assert result["rca"]["evidence_line_numbers"] == [2]
     assert result["rca"]["notes"] == ["The source file imports a path that resolves inside src/utils."]
@@ -320,3 +320,4 @@ def test_pipeline_run_without_repo_skips_verification_and_preserves_planning():
     assert result["remediation"]["evidence"]["repo_context"]["metadata"]["scan_error"] == "repo not provided"
     assert result["verification"]["status"] == "inconclusive"
     assert result["verification"]["reason"] == "verification skipped: repo not provided"
+    assert result["verification"]["evidence"]["capability"]["selected_validator"] == "none"

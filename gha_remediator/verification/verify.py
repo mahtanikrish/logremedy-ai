@@ -3,16 +3,19 @@ from __future__ import annotations
 from typing import Optional, Any, Dict, List
 import os
 
-from ..types import RemediationPlan, VerificationResult
+from ..types import RCAReport, RemediationPlan, RepoContext, VerificationResult
+from .adapters import AdapterCheckResult, AdapterSelection, run_adapter_check, select_adapter
+from .capability import build_capability, capability_from_selection, early_exit_capability
+from .grounding import evaluate_grounding
 from .policy import (
     VerificationProfile,
     evaluate_patch_budget,
     evaluate_patch_policy,
     is_command_allowed,
 )
-from .static_checks import basic_static_validation
-from .replay import replay_with_act, ReplayConfig
+from .replay import ReplayConfig, replay_skipped_evidence, replay_with_act
 from .sandbox import verify_commands_locally
+from .static_checks import basic_static_validation
 from .venv_verifier import verify_python_dependency
 from .workspace import (
     WorkspacePreparationError,
@@ -24,8 +27,10 @@ from .workspace import (
 GATE_ORDER = (
     "preconditions",
     "policy",
+    "grounding",
     "patch_apply",
     "static",
+    "adapter_check",
     "sandbox",
     "replay",
 )
@@ -64,15 +69,20 @@ def _build_evidence(
     *,
     terminal_gate: str,
     gates: List[Dict[str, Any]],
+    capability: Dict[str, Any],
     static: Optional[Dict[str, Any]] = None,
+    replay: Optional[Dict[str, Any]] = None,
     extra: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     evidence: Dict[str, Any] = {
         "gate": terminal_gate,
         "gates": _completed_gates(gates, terminal_gate),
+        "capability": capability,
     }
     if static is not None:
         evidence["static"] = static
+    if replay is not None:
+        evidence["replay"] = replay
     if extra:
         evidence.update(extra)
     return evidence
@@ -84,7 +94,9 @@ def _result(
     reason: str,
     terminal_gate: str,
     gates: List[Dict[str, Any]],
+    capability: Dict[str, Any],
     static: Optional[Dict[str, Any]] = None,
+    replay: Optional[Dict[str, Any]] = None,
     extra: Optional[Dict[str, Any]] = None,
 ) -> VerificationResult:
     return VerificationResult(
@@ -93,7 +105,9 @@ def _result(
         evidence=_build_evidence(
             terminal_gate=terminal_gate,
             gates=gates,
+            capability=capability,
             static=static,
+            replay=replay,
             extra=extra,
         ),
     )
@@ -107,11 +121,34 @@ def _gate_status_from_verifier(status: str) -> str:
     return "inconclusive"
 
 
+def _selection_metadata(selection: AdapterSelection) -> Dict[str, Any]:
+    return {
+        "name": selection.name,
+        "reason": selection.reason,
+        "matching_validators": selection.matching_validators,
+        "suppressed_validators": selection.suppressed_validators,
+    }
+
+
+def _accepted_reason(adapter_result: AdapterCheckResult, selection: AdapterSelection) -> str:
+    if adapter_result.availability == "reduced" or adapter_result.fallback_used:
+        return f"accepted under reduced validator {selection.name}"
+    return f"accepted under supported validator {selection.name}"
+
+
+def _inconclusive_reason(selection: AdapterSelection, adapter_result: AdapterCheckResult) -> str:
+    if adapter_result.availability == "unavailable":
+        return f"inconclusive because validator {selection.name} is unavailable"
+    return f"inconclusive because validator {selection.name} could not validate this case"
+
+
 def verify_plan(
     plan: RemediationPlan,
     repo: str,
     replay_cfg: Optional[ReplayConfig] = None,
     verification_profile: VerificationProfile = "strict",
+    report: Optional[RCAReport] = None,
+    repo_context: Optional[RepoContext] = None,
 ) -> VerificationResult:
     gates: List[Dict[str, Any]] = []
     touched = [p.path for p in plan.patches]
@@ -129,6 +166,7 @@ def verify_plan(
             reason=f"repo does not exist: {repo}",
             terminal_gate="preconditions",
             gates=gates,
+            capability=early_exit_capability(summary="verification rejected at preconditions"),
             extra={"repo": repo, "repo_exists": False},
         )
 
@@ -141,6 +179,7 @@ def verify_plan(
             reason=err.reason,
             terminal_gate="preconditions",
             gates=gates,
+            capability=early_exit_capability(summary="verification rejected at preconditions"),
             extra=err.details,
         )
 
@@ -169,6 +208,7 @@ def verify_plan(
                 reason=f"safety: {budget_decision.reason}",
                 terminal_gate="policy",
                 gates=gates,
+                capability=early_exit_capability(summary="verification rejected by policy"),
                 extra=budget_decision.details,
             )
 
@@ -192,6 +232,7 @@ def verify_plan(
                     reason=f"safety: {dec.reason}",
                     terminal_gate="policy",
                     gates=gates,
+                    capability=early_exit_capability(summary="verification rejected by policy"),
                     extra=dec.details or {"path": p.path},
                 )
 
@@ -211,6 +252,7 @@ def verify_plan(
                     reason=f"safety: {dec.reason}",
                     terminal_gate="policy",
                     gates=gates,
+                    capability=early_exit_capability(summary="verification rejected by policy"),
                     extra={"command": c},
                 )
 
@@ -227,15 +269,49 @@ def verify_plan(
             )
         )
 
+        grounding = evaluate_grounding(
+            plan,
+            repo=repo,
+            report=report,
+            repo_context=repo_context,
+        )
+        if not grounding.allowed:
+            gates.append(
+                _gate_result(
+                    "grounding",
+                    "failed",
+                    grounding.reason,
+                    grounding.details,
+                )
+            )
+            return _result(
+                status="rejected_grounding",
+                reason=grounding.reason,
+                terminal_gate="grounding",
+                gates=gates,
+                capability=early_exit_capability(summary="verification rejected by grounding"),
+                extra=grounding.details,
+            )
+
+        gates.append(
+            _gate_result(
+                "grounding",
+                "passed",
+                grounding.reason,
+                {**grounding.details, "sandbox_workdir": grounding.sandbox_workdir},
+            )
+        )
+
         try:
             patch_apply = apply_plan_patches(workspace, plan)
         except WorkspacePreparationError as err:
             gates.append(_gate_result("patch_apply", "failed", err.reason, err.details))
             return _result(
-                status="rejected_precondition",
+                status="rejected_unappliable",
                 reason=err.reason,
                 terminal_gate="patch_apply",
                 gates=gates,
+                capability=early_exit_capability(summary="verification rejected because patch did not apply"),
                 extra=err.details,
             )
 
@@ -250,31 +326,42 @@ def verify_plan(
 
         static = basic_static_validation(workspace.patched_repo, touched)
         static_checks = static.get("checks", [])
-        if static_checks:
-            first_failure = next((chk for chk in static_checks if chk.get("ok") is False), None)
-            if first_failure is not None:
-                gates.append(
-                    _gate_result(
-                        "static",
-                        "failed",
-                        f"static validation failed: {first_failure.get('msg')}",
-                        {"checks": static_checks},
-                    )
+        first_failure = next((chk for chk in static_checks if chk.get("ok") is False), None)
+        if first_failure is not None:
+            gates.append(
+                _gate_result(
+                    "static",
+                    "failed",
+                    f"static validation failed: {first_failure.get('msg')}",
+                    {"checks": static_checks},
                 )
-                return _result(
-                    status="rejected_static",
-                    reason=f"static validation failed: {first_failure.get('msg')}",
-                    terminal_gate="static",
-                    gates=gates,
-                    static=static,
-                    extra={"checks": static_checks},
-                )
+            )
+            return _result(
+                status="rejected_static",
+                reason=f"static validation failed: {first_failure.get('msg')}",
+                terminal_gate="static",
+                gates=gates,
+                capability=build_capability(
+                    selected_validator="static",
+                    selection_reason="deterministic static validation failed before adapter execution",
+                    matching_validators=[],
+                    suppressed_validators=[],
+                    availability="available",
+                    outcome="rejected",
+                    summary="verification rejected by static validation",
+                    execution_mode="deterministic",
+                    fallback_used=False,
+                ),
+                static=static,
+                extra={"checks": static_checks},
+            )
 
+        if static_checks:
             gates.append(
                 _gate_result(
                     "static",
                     "passed",
-                    "static validation passed",
+                    "static validation completed",
                     {"checks": static_checks},
                 )
             )
@@ -287,6 +374,91 @@ def verify_plan(
                     {"touched_paths": touched},
                 )
             )
+
+        selection = select_adapter(
+            plan,
+            report=report,
+            repo_context=repo_context,
+            default_workdir=grounding.sandbox_workdir,
+        )
+        adapter_result = run_adapter_check(
+            selection,
+            patched_repo=workspace.patched_repo,
+            plan=plan,
+            report=report,
+            repo_context=repo_context,
+        )
+        gates.append(
+            _gate_result(
+                "adapter_check",
+                adapter_result.status,
+                adapter_result.reason,
+                {
+                    **adapter_result.details,
+                    "adapter": selection.name,
+                    "adapter_reason": selection.reason,
+                    "matching_validators": selection.matching_validators,
+                    "suppressed_validators": selection.suppressed_validators,
+                    "availability": adapter_result.availability,
+                    "fallback_used": adapter_result.fallback_used,
+                },
+            )
+        )
+
+        selection_meta = _selection_metadata(selection)
+
+        if adapter_result.status == "failed":
+            return _result(
+                status="rejected_adapter_check",
+                reason=adapter_result.reason,
+                terminal_gate="adapter_check",
+                gates=gates,
+                capability=capability_from_selection(
+                    selection_meta,
+                    availability=adapter_result.availability,
+                    outcome="rejected",
+                    summary=adapter_result.summary or "validator failed",
+                    execution_mode="deterministic",
+                    fallback_used=adapter_result.fallback_used,
+                ),
+                static=static,
+                extra=adapter_result.details,
+            )
+
+        if adapter_result.status == "inconclusive":
+            replay = replay_skipped_evidence(
+                reason=adapter_result.summary or adapter_result.reason,
+                cfg=replay_cfg,
+                repo=workspace.patched_repo,
+            )
+            return _result(
+                status="inconclusive",
+                reason=_inconclusive_reason(selection, adapter_result),
+                terminal_gate="replay",
+                gates=gates,
+                capability=capability_from_selection(
+                    selection_meta,
+                    availability=adapter_result.availability,
+                    outcome="inconclusive",
+                    summary=adapter_result.summary or "validator could not validate this case",
+                    execution_mode="deterministic",
+                    fallback_used=adapter_result.fallback_used,
+                ),
+                static=static,
+                replay=replay,
+                extra=adapter_result.details,
+            )
+
+        execution_commands: List[str] = []
+        execution_workdir = grounding.sandbox_workdir
+        if adapter_result.execution is not None:
+            execution_workdir = adapter_result.execution.workdir or execution_workdir
+            if adapter_result.execution.commands:
+                execution_commands = list(adapter_result.execution.commands)
+        elif selection.execution is not None:
+            execution_workdir = selection.execution.workdir or execution_workdir
+            if selection.execution.commands:
+                execution_commands = list(selection.execution.commands)
 
         if plan.fix_type in PYTHON_DEP_FIXES:
             pkg = (
@@ -304,17 +476,58 @@ def verify_plan(
                     )
                 )
                 if status == "failed":
+                    replay = replay_skipped_evidence(
+                        reason="sandbox execution failed",
+                        cfg=replay_cfg,
+                        repo=workspace.patched_repo,
+                    )
                     return _result(
-                        status="failed_replay",
-                        reason=f"venv sandbox: pip install {pkg!r} failed",
+                        status="rejected_execution",
+                        reason="local sandbox command failed",
                         terminal_gate="sandbox",
                         gates=gates,
+                        capability=capability_from_selection(
+                            selection_meta,
+                            availability=adapter_result.availability,
+                            outcome="rejected",
+                            summary="sandbox execution failed",
+                            execution_mode="deterministic",
+                            fallback_used=adapter_result.fallback_used,
+                        ),
                         static=static,
+                        replay=replay,
                         extra={"mode": "venv", **ev},
                     )
-            elif plan.commands:
+                if status == "inconclusive":
+                    replay = replay_skipped_evidence(
+                        reason="sandbox execution was inconclusive",
+                        cfg=replay_cfg,
+                        repo=workspace.patched_repo,
+                    )
+                    return _result(
+                        status="inconclusive",
+                        reason="inconclusive because sandbox execution could not validate this case",
+                        terminal_gate="sandbox",
+                        gates=gates,
+                        capability=capability_from_selection(
+                            selection_meta,
+                            availability=adapter_result.availability,
+                            outcome="inconclusive",
+                            summary="sandbox execution was inconclusive",
+                            execution_mode="deterministic",
+                            fallback_used=adapter_result.fallback_used,
+                        ),
+                        static=static,
+                        replay=replay,
+                        extra={"mode": "venv", **ev},
+                    )
+            elif execution_commands:
                 sandbox_repo = workspace.clone_for_gate("sandbox")
-                status, ev = verify_commands_locally(plan.commands, sandbox_repo)
+                status, ev = verify_commands_locally(
+                    execution_commands,
+                    sandbox_repo,
+                    workdir=execution_workdir,
+                )
                 gates.append(
                     _gate_result(
                         "sandbox",
@@ -324,19 +537,62 @@ def verify_plan(
                     )
                 )
                 if status == "failed":
+                    replay = replay_skipped_evidence(
+                        reason="sandbox execution failed",
+                        cfg=replay_cfg,
+                        repo=workspace.patched_repo,
+                    )
                     return _result(
-                        status="failed_replay",
+                        status="rejected_execution",
                         reason="local sandbox command failed",
                         terminal_gate="sandbox",
                         gates=gates,
+                        capability=capability_from_selection(
+                            selection_meta,
+                            availability=adapter_result.availability,
+                            outcome="rejected",
+                            summary="sandbox execution failed",
+                            execution_mode="deterministic",
+                            fallback_used=adapter_result.fallback_used,
+                        ),
                         static=static,
+                        replay=replay,
+                        extra=ev,
+                    )
+                if status == "inconclusive":
+                    replay = replay_skipped_evidence(
+                        reason="sandbox execution was inconclusive",
+                        cfg=replay_cfg,
+                        repo=workspace.patched_repo,
+                    )
+                    return _result(
+                        status="inconclusive",
+                        reason="inconclusive because sandbox execution could not validate this case",
+                        terminal_gate="sandbox",
+                        gates=gates,
+                        capability=capability_from_selection(
+                            selection_meta,
+                            availability=adapter_result.availability,
+                            outcome="inconclusive",
+                            summary="sandbox execution was inconclusive",
+                            execution_mode="deterministic",
+                            fallback_used=adapter_result.fallback_used,
+                        ),
+                        static=static,
+                        replay=replay,
                         extra=ev,
                     )
             else:
                 gates.append(_gate_result("sandbox", "skipped", "no sandbox verification available"))
-        elif plan.commands:
+        elif adapter_result.skip_sandbox:
+            gates.append(_gate_result("sandbox", "skipped", "adapter performed execution validation"))
+        elif execution_commands:
             sandbox_repo = workspace.clone_for_gate("sandbox")
-            status, ev = verify_commands_locally(plan.commands, sandbox_repo)
+            status, ev = verify_commands_locally(
+                execution_commands,
+                sandbox_repo,
+                workdir=execution_workdir,
+            )
             gates.append(
                 _gate_result(
                     "sandbox",
@@ -346,53 +602,114 @@ def verify_plan(
                 )
             )
             if status == "failed":
+                replay = replay_skipped_evidence(
+                    reason="sandbox execution failed",
+                    cfg=replay_cfg,
+                    repo=workspace.patched_repo,
+                )
                 return _result(
-                    status="failed_replay",
+                    status="rejected_execution",
                     reason="local sandbox command failed",
                     terminal_gate="sandbox",
                     gates=gates,
+                    capability=capability_from_selection(
+                        selection_meta,
+                        availability=adapter_result.availability,
+                        outcome="rejected",
+                        summary="sandbox execution failed",
+                        execution_mode="deterministic",
+                        fallback_used=adapter_result.fallback_used,
+                    ),
                     static=static,
+                    replay=replay,
+                    extra=ev,
+                )
+            if status == "inconclusive":
+                replay = replay_skipped_evidence(
+                    reason="sandbox execution was inconclusive",
+                    cfg=replay_cfg,
+                    repo=workspace.patched_repo,
+                )
+                return _result(
+                    status="inconclusive",
+                    reason="inconclusive because sandbox execution could not validate this case",
+                    terminal_gate="sandbox",
+                    gates=gates,
+                    capability=capability_from_selection(
+                        selection_meta,
+                        availability=adapter_result.availability,
+                        outcome="inconclusive",
+                        summary="sandbox execution was inconclusive",
+                        execution_mode="deterministic",
+                        fallback_used=adapter_result.fallback_used,
+                    ),
+                    static=static,
+                    replay=replay,
                     extra=ev,
                 )
         else:
             gates.append(_gate_result("sandbox", "skipped", "no commands to verify"))
 
+        accepted_reason = _accepted_reason(adapter_result, selection)
+        accepted_capability = capability_from_selection(
+            selection_meta,
+            availability=adapter_result.availability,
+            outcome="accepted",
+            summary=adapter_result.summary or f"{selection.name} validator passed",
+            execution_mode="deterministic",
+            fallback_used=adapter_result.fallback_used,
+        )
+
         if replay_cfg is None:
-            gates.append(_gate_result("replay", "skipped", "replay not configured"))
-            return _result(
-                status="inconclusive",
+            replay = replay_skipped_evidence(
                 reason="replay not configured",
+                cfg=None,
+                repo=workspace.patched_repo,
+            )
+            gates.append(_gate_result("replay", "skipped", "replay not configured", replay))
+            return _result(
+                status="accepted",
+                reason=accepted_reason,
                 terminal_gate="replay",
                 gates=gates,
+                capability=accepted_capability,
                 static=static,
+                replay=replay,
             )
 
         if not plan.patches:
+            replay = replay_skipped_evidence(
+                reason="replay skipped: no persistent patched repo state",
+                cfg=replay_cfg,
+                repo=workspace.patched_repo,
+            )
             gates.append(
                 _gate_result(
                     "replay",
                     "skipped",
                     "replay skipped: no persistent patched repo state",
-                    {"commands": plan.commands},
+                    replay,
                 )
             )
             return _result(
-                status="inconclusive",
-                reason="replay skipped: no persistent patched repo state",
+                status="accepted",
+                reason=accepted_reason,
                 terminal_gate="replay",
                 gates=gates,
+                capability=accepted_capability,
                 static=static,
-                extra={"commands": plan.commands},
+                replay=replay,
+                extra={"commands": execution_commands},
             )
 
         replay_repo = workspace.clone_for_gate("replay")
-        status, ev = replay_with_act(replay_repo, replay_cfg)
+        status, replay = replay_with_act(replay_repo, replay_cfg)
         gates.append(
             _gate_result(
                 "replay",
                 _gate_status_from_verifier(status),
-                ev.get("reason", "replay finished"),
-                ev,
+                replay.get("classification", "replay finished"),
+                replay,
             )
         )
 
@@ -402,8 +719,16 @@ def verify_plan(
                 reason="replay passed",
                 terminal_gate="replay",
                 gates=gates,
+                capability=capability_from_selection(
+                    selection_meta,
+                    availability=adapter_result.availability,
+                    outcome="verified",
+                    summary=adapter_result.summary or f"{selection.name} validator passed",
+                    execution_mode="replay",
+                    fallback_used=adapter_result.fallback_used,
+                ),
                 static=static,
-                extra=ev,
+                replay=replay,
             )
 
         if status == "failed":
@@ -412,15 +737,24 @@ def verify_plan(
                 reason="replay failed",
                 terminal_gate="replay",
                 gates=gates,
+                capability=capability_from_selection(
+                    selection_meta,
+                    availability=adapter_result.availability,
+                    outcome="rejected",
+                    summary="deterministic validation passed, but replay failed",
+                    execution_mode="replay",
+                    fallback_used=adapter_result.fallback_used,
+                ),
                 static=static,
-                extra=ev,
+                replay=replay,
             )
 
         return _result(
-            status="inconclusive",
-            reason=ev.get("reason", "replay inconclusive"),
+            status="accepted",
+            reason=accepted_reason,
             terminal_gate="replay",
             gates=gates,
+            capability=accepted_capability,
             static=static,
-            extra=ev,
+            replay=replay,
         )

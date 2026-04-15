@@ -22,9 +22,12 @@ ALLOWED_FILES = {
 }
 
 SUPPORTED_BENCHMARK_SUFFIXES = {
+    ".md",
     ".py",
     ".json",
+    ".sh",
     ".toml",
+    ".txt",
     ".yaml",
     ".yml",
     ".cfg",
@@ -176,14 +179,7 @@ def evaluate_patch_policy(
     if any(normalized_str.startswith(prefix) for prefix in ALLOWED_PATH_PREFIXES):
         return PolicyDecision(True, "allowed workflow path", {"path": normalized_str, "profile": profile})
 
-    if profile == "strict":
-        return PolicyDecision(
-            False,
-            f"patch to disallowed path: {normalized_str}",
-            {"path": normalized_str, "profile": profile},
-        )
-
-    if suffix not in SUPPORTED_BENCHMARK_SUFFIXES:
+    if suffix not in SUPPORTED_BENCHMARK_SUFFIXES and basename not in ALLOWED_FILES:
         return PolicyDecision(
             False,
             f"unsupported file type for {profile}: {normalized_str}",
@@ -208,6 +204,19 @@ def evaluate_patch_policy(
         return PolicyDecision(
             False,
             f"supported benchmark patch must target a regular file: {normalized_str}",
+            {"path": normalized_str, "profile": profile},
+        )
+
+    if profile == "strict" and not candidate.exists():
+        return PolicyDecision(
+            False,
+            f"strict policy requires an existing file target: {normalized_str}",
+            {"path": normalized_str, "profile": profile},
+        )
+    if profile == "strict" and not candidate.is_file():
+        return PolicyDecision(
+            False,
+            f"strict policy requires a regular file target: {normalized_str}",
             {"path": normalized_str, "profile": profile},
         )
 

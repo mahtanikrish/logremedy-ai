@@ -49,12 +49,105 @@ def _tail(text: str, limit: int = 2000) -> str:
     return text[-limit:]
 
 
+def _normalize_relpath(raw_path: str) -> str:
+    normalized = raw_path.strip().replace("\\", "/")
+    if normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def _strip_diff_prefix(path: str) -> str:
+    if path.startswith(("a/", "b/")):
+        return path[2:]
+    return path
+
+
+def _paths_compatible(left: str, right: str) -> bool:
+    if left == right:
+        return True
+    return left.endswith(f"/{right}") or right.endswith(f"/{left}")
+
+
 def _looks_like_git_diff(diff_text: str) -> bool:
     return (
         "diff --git a/" in diff_text
         or "\n--- a/" in diff_text
         or diff_text.startswith("--- a/")
     )
+
+
+def _split_diff_header(line: str) -> tuple[str, str, str] | None:
+    if line.startswith("--- "):
+        prefix = "--- "
+    elif line.startswith("+++ "):
+        prefix = "+++ "
+    else:
+        return None
+    payload = line[len(prefix):]
+    if not payload:
+        return None
+    path, sep, suffix = payload.partition("\t")
+    return prefix, path.strip(), f"{sep}{suffix}" if sep else ""
+
+
+def _canonicalize_patch(patch_path: str, diff_text: str) -> tuple[str, dict[str, Any]]:
+    canonical_path = _normalize_relpath(patch_path)
+    lines = diff_text.splitlines(keepends=True)
+    changed_headers: list[dict[str, str]] = []
+    changed_git_headers: list[dict[str, str]] = []
+    out: list[str] = []
+
+    for line in lines:
+        header = _split_diff_header(line)
+        if header is not None:
+            prefix, raw_path, suffix = header
+            if raw_path != "/dev/null":
+                normalized_header = _normalize_relpath(_strip_diff_prefix(raw_path))
+                if _paths_compatible(normalized_header, canonical_path):
+                    replacement = canonical_path
+                    if replacement != raw_path:
+                        changed_headers.append(
+                            {
+                                "prefix": prefix.strip(),
+                                "before": raw_path,
+                                "after": replacement,
+                            }
+                        )
+                        line = f"{prefix}{replacement}{suffix}"
+                        if not line.endswith("\n"):
+                            line += "\n"
+            out.append(line)
+            continue
+
+        if line.startswith("diff --git "):
+            parts = line.rstrip("\n").split()
+            if len(parts) >= 4:
+                left = _normalize_relpath(_strip_diff_prefix(parts[2]))
+                right = _normalize_relpath(_strip_diff_prefix(parts[3]))
+                if _paths_compatible(left, canonical_path) and _paths_compatible(right, canonical_path):
+                    before = f"{parts[2]} {parts[3]}"
+                    parts[2] = f"a/{canonical_path}"
+                    parts[3] = f"b/{canonical_path}"
+                    after = f"{parts[2]} {parts[3]}"
+                    if before != after:
+                        changed_git_headers.append({"before": before, "after": after})
+                        line = " ".join(parts) + "\n"
+            out.append(line)
+            continue
+
+        out.append(line)
+
+    payload = "".join(out)
+    if payload and not payload.endswith("\n"):
+        payload += "\n"
+
+    return payload, {
+        "original_path": patch_path,
+        "canonical_path": canonical_path,
+        "header_rewrites": changed_headers,
+        "git_header_rewrites": changed_git_headers,
+        "diff_rewritten": bool(changed_headers or changed_git_headers or patch_path != canonical_path),
+    }
 
 
 def _run_git_apply_once(
@@ -130,7 +223,7 @@ def prepare_workspace_copy(repo: str) -> PreparedWorkspace:
 
 
 def apply_plan_patches(workspace: PreparedWorkspace, plan: RemediationPlan) -> Dict[str, Any]:
-    touched_paths = [patch.path for patch in plan.patches]
+    touched_paths = []
     if not plan.patches:
         return {
             "status": "skipped",
@@ -139,33 +232,41 @@ def apply_plan_patches(workspace: PreparedWorkspace, plan: RemediationPlan) -> D
         }
 
     repo_path = Path(workspace.patched_repo)
+    canonicalization: list[dict[str, Any]] = []
     for index, patch in enumerate(plan.patches):
         try:
-            checked, checked_strip_level = _run_git_apply(repo_path, patch.diff, check=True)
+            canonical_diff, patch_canonicalization = _canonicalize_patch(patch.path, patch.diff)
+            canonicalization.append(patch_canonicalization)
+            touched_paths.append(patch_canonicalization["canonical_path"])
+            checked, checked_strip_level = _run_git_apply(repo_path, canonical_diff, check=True)
             if checked.returncode != 0:
                 raise WorkspacePreparationError(
                     gate="patch_apply",
                     reason=f"patch does not apply cleanly: {patch.path}",
                     details={
                         "path": patch.path,
+                        "canonical_path": patch_canonicalization["canonical_path"],
                         "patch_index": index,
                         "mode": "check",
                         "strip_level": checked_strip_level,
+                        "canonicalization": patch_canonicalization,
                         "stdout_tail": _tail(checked.stdout),
                         "stderr_tail": _tail(checked.stderr),
                     },
                 )
 
-            applied, applied_strip_level = _run_git_apply(repo_path, patch.diff, check=False)
+            applied, applied_strip_level = _run_git_apply(repo_path, canonical_diff, check=False)
             if applied.returncode != 0:
                 raise WorkspacePreparationError(
                     gate="patch_apply",
                     reason=f"failed to apply patch: {patch.path}",
                     details={
                         "path": patch.path,
+                        "canonical_path": patch_canonicalization["canonical_path"],
                         "patch_index": index,
                         "mode": "apply",
                         "strip_level": applied_strip_level,
+                        "canonicalization": patch_canonicalization,
                         "stdout_tail": _tail(applied.stdout),
                         "stderr_tail": _tail(applied.stderr),
                     },
@@ -180,7 +281,7 @@ def apply_plan_patches(workspace: PreparedWorkspace, plan: RemediationPlan) -> D
     return {
         "status": "passed",
         "reason": f"applied {len(plan.patches)} patch(es)",
-        "details": {"paths": touched_paths},
+        "details": {"paths": touched_paths, "canonicalization": canonicalization},
     }
 
 

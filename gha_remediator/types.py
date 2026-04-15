@@ -15,9 +15,14 @@ FailureClass = Literal[
 
 VerificationStatus = Literal[
     "verified",
+    "accepted",
     "rejected_precondition",
     "rejected_policy",
+    "rejected_grounding",
+    "rejected_unappliable",
     "rejected_static",
+    "rejected_adapter_check",
+    "rejected_execution",
     "failed_replay",
     "inconclusive"
 ]
