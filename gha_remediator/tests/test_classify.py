@@ -48,3 +48,16 @@ def test_unauthorized():
 def test_unknown():
     log = "some completely unrelated output line with no known failure pattern"
     assert classify_failure(log) == "unknown_failure"
+
+
+def test_dependabot_transitive_conflict_is_environment_dependency_failure():
+    log = "\n".join(
+        [
+            "Starting security update job for ColorlibHQ/AdminLTE",
+            "The latest possible version that can be installed is 1.29.0 because of the following conflicting dependencies:",
+            "Dependabot encountered '1' error(s) during execution, please check the logs for more details.",
+            "| transitive_update_not_possible |",
+            "##[error]Dependabot encountered an error performing the update",
+        ]
+    )
+    assert classify_failure(log) == "environment_dependency_failure"

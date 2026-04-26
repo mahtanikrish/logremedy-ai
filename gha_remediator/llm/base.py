@@ -13,3 +13,10 @@ class LLMConfig:
 class LLMClient(Protocol):
     def generate_json(self, *, system: str, user: str, schema_hint: str, cfg: LLMConfig) -> Dict[str, Any]:
         ...
+
+
+def last_response_metadata(llm: Optional[LLMClient]) -> Dict[str, Any]:
+    metadata = getattr(llm, "last_response_metadata", None)
+    if isinstance(metadata, dict):
+        return dict(metadata)
+    return {}

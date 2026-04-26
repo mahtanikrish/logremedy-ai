@@ -1,7 +1,10 @@
 from gha_remediator.types import LogLine
 from gha_remediator.preprocess import (
+    _get_token_encoding,
+    approx_tokens,
     key_log_filter,
     key_log_expand,
+    raw_tail_select,
     token_overflow_prune,
     PreprocessConfig,
 )
@@ -104,3 +107,89 @@ def test_prune_preserves_chronological_order():
     pruned = token_overflow_prune(blocks, keys)
     starts = [b.start for b in pruned]
     assert starts == sorted(starts)
+
+
+def test_prune_trims_oversized_single_block_instead_of_dropping_it():
+    lines = _make_lines([f"line {i} " + ("x" * 80) for i in range(1, 31)])
+    key = [LogLine(30, "error: transitive_update_not_possible " + ("y" * 80))]
+    blocks = key_log_expand(lines, key, cfg=PreprocessConfig(before=29, after=0))
+
+    pruned = token_overflow_prune(blocks, key, cfg=PreprocessConfig(token_budget=60))
+
+    assert len(pruned) == 1
+    assert pruned[0].lines
+    assert pruned[0].end == 30
+    total = approx_tokens(pruned[0].to_text())
+    assert total <= 60
+
+
+def test_raw_tail_select_keeps_tail_within_budget():
+    lines = _make_lines([f"line {i}" for i in range(1, 101)])
+    cfg = PreprocessConfig(token_budget=25)
+    selected = raw_tail_select(lines, cfg=cfg)
+    assert selected
+    assert selected[-1].lineno == 100
+    total = sum(approx_tokens(line.text) for line in selected)
+    assert total <= cfg.token_budget
+
+
+def test_approx_tokens_unknown_model_uses_fallback(monkeypatch):
+    _get_token_encoding.cache_clear()
+    calls = []
+
+    class _Encoding:
+        def encode_ordinary(self, text):
+            return list(range(len(text.split())))
+
+    def fake_encoding_for_model(model):
+        raise KeyError(model)
+
+    def fake_get_encoding(name):
+        calls.append(name)
+        if name == "o200k_base":
+            return _Encoding()
+        raise KeyError(name)
+
+    monkeypatch.setattr("gha_remediator.preprocess.tiktoken.encoding_for_model", fake_encoding_for_model)
+    monkeypatch.setattr("gha_remediator.preprocess.tiktoken.get_encoding", fake_get_encoding)
+
+    assert approx_tokens("alpha beta gamma", model="unknown/model") == 3
+    assert calls == ["o200k_base"]
+    _get_token_encoding.cache_clear()
+
+
+def test_approx_tokens_prefers_model_suffix(monkeypatch):
+    _get_token_encoding.cache_clear()
+    seen = []
+
+    class _Encoding:
+        def encode_ordinary(self, text):
+            return [text]
+
+    def fake_encoding_for_model(model):
+        seen.append(model)
+        if model == "gpt-5-mini":
+            return _Encoding()
+        raise KeyError(model)
+
+    monkeypatch.setattr("gha_remediator.preprocess.tiktoken.encoding_for_model", fake_encoding_for_model)
+
+    assert approx_tokens("content", model="openai/gpt-5-mini") == 1
+    assert seen == ["openai/gpt-5-mini", "gpt-5-mini"]
+    _get_token_encoding.cache_clear()
+
+
+def test_approx_tokens_falls_back_to_heuristic_when_encoding_unavailable(monkeypatch):
+    _get_token_encoding.cache_clear()
+
+    def fake_encoding_for_model(model):
+        raise RuntimeError(f"cannot load {model}")
+
+    def fake_get_encoding(name):
+        raise RuntimeError(f"cannot load {name}")
+
+    monkeypatch.setattr("gha_remediator.preprocess.tiktoken.encoding_for_model", fake_encoding_for_model)
+    monkeypatch.setattr("gha_remediator.preprocess.tiktoken.get_encoding", fake_get_encoding)
+
+    assert approx_tokens("abcdefghij", model="gpt-4o-mini") == 3
+    _get_token_encoding.cache_clear()

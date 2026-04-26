@@ -12,7 +12,15 @@ class _StubRemediator:
     def __init__(self, result):
         self._result = result
 
-    def run(self, raw_log_text, repo, replay=False, job=None, verification_profile="strict"):
+    def run(
+        self,
+        raw_log_text,
+        repo,
+        replay=False,
+        job=None,
+        verification_profile="strict",
+        preprocessing_mode="curated",
+    ):
         return self._result
 
 
@@ -111,7 +119,15 @@ def test_evaluate_synthetic_dataset_records_execution_errors(monkeypatch, tmp_pa
     fake_logs = [{"path": str(tmp_path / "case.log"), "content": "log", "ground_truth": None}]
 
     class _FailingRemediator:
-        def run(self, raw_log_text, repo, replay=False, job=None, verification_profile="strict"):
+        def run(
+            self,
+            raw_log_text,
+            repo,
+            replay=False,
+            job=None,
+            verification_profile="strict",
+            preprocessing_mode="curated",
+        ):
             response = requests.Response()
             response.status_code = 429
             raise requests.HTTPError("Too Many Requests", response=response)

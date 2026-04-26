@@ -38,10 +38,20 @@ def _slugify(value: str) -> str:
     return slug or "run"
 
 
-def default_benchmark_artifact_dir(*, benchmark_root: str, split: str, partition: str, model: str) -> Path:
+def default_benchmark_artifact_dir(
+    *,
+    benchmark_root: str,
+    split: str,
+    partition: str,
+    model: str,
+    preprocessing_mode: str = "curated",
+) -> Path:
     root = Path(benchmark_root).expanduser().resolve()
     split_name = Path(split).stem
-    run_name = f"{_slugify(split_name)}__{_slugify(partition)}__{_slugify(model)}"
+    run_name = (
+        f"{_slugify(split_name)}__{_slugify(partition)}__"
+        f"{_slugify(model)}__{_slugify(preprocessing_mode)}"
+    )
     return root / "exports" / "evaluations" / run_name
 
 
@@ -165,6 +175,7 @@ def _serialize_rca_report(report: RCAReport) -> Dict[str, Any]:
         "confidence": report.confidence,
         "evidence_line_numbers": report.evidence_line_numbers,
         "notes": report.notes,
+        "metadata": report.metadata,
     }
 
 
@@ -229,6 +240,8 @@ def write_case_result_artifact(
             "batch_number": run_metadata.get("batch_number"),
             "benchmark_mode": run_metadata.get("benchmark_mode"),
             "verification_profile": run_metadata.get("verification_profile"),
+            "preprocessing_mode": run_metadata.get("preprocessing_mode"),
+            "use_success_logs": run_metadata.get("use_success_logs"),
         },
         "incident_id": case_result.get("incident_id"),
         "source_case_id": case_result.get("source_case_id"),
@@ -378,13 +391,18 @@ def _run_case_with_retries(
     max_retries: int,
     benchmark_mode: Literal["component", "full"],
     verification_profile: VerificationProfile,
+    preprocessing_mode: str,
 ) -> Dict[str, Any]:
     last_error: Optional[Exception] = None
     attempts = max(1, max_retries + 1)
     for attempt in range(attempts):
         try:
             if benchmark_mode == "component":
-                report = remediator.analyze(raw_log_text, success_logs=success_logs)
+                report = remediator.analyze(
+                    raw_log_text,
+                    success_logs=success_logs,
+                    preprocessing_mode=preprocessing_mode,
+                )
                 result: Dict[str, Any] = {
                     "rca": _serialize_rca_report(report),
                 }
@@ -399,6 +417,7 @@ def _run_case_with_retries(
                 replay=replay,
                 job=None,
                 verification_profile=verification_profile,
+                preprocessing_mode=preprocessing_mode,
             )
         except requests.HTTPError as e:
             last_error = e
@@ -468,6 +487,7 @@ def evaluate_benchmark_split(
     batch_number: Optional[int] = None,
     benchmark_mode: BenchmarkMode = "auto",
     verification_profile: VerificationProfile = "strict",
+    preprocessing_mode: str = "curated",
 ) -> Dict[str, Any]:
     all_cases = load_benchmark_cases(
         benchmark_root=benchmark_root,
@@ -531,6 +551,7 @@ def evaluate_benchmark_split(
             "repo_path": repo_path,
             "repo_resolution": repo_resolution,
             "benchmark_mode": resolved_benchmark_mode,
+            "preprocessing_mode": preprocessing_mode,
             "log_path": case_info.get("log_path"),
             "success_log_path": case_info.get("success_log_path"),
             "available_tasks": dict(case_info.get("metadata", {}).get("available_tasks", {})),
@@ -546,6 +567,7 @@ def evaluate_benchmark_split(
                 max_retries=max_retries,
                 benchmark_mode=resolved_benchmark_mode,
                 verification_profile=verification_profile,
+                preprocessing_mode=preprocessing_mode,
             )
             case_result.update(
                 {
@@ -589,6 +611,7 @@ def evaluate_benchmark_split(
                     "batch_number": batch_number,
                     "benchmark_mode": resolved_benchmark_mode,
                     "verification_profile": verification_profile,
+                    "preprocessing_mode": preprocessing_mode,
                     "replay": replay,
                     "use_success_logs": use_success_logs,
                     "max_retries": max_retries,

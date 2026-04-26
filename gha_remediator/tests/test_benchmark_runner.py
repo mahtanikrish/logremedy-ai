@@ -16,12 +16,13 @@ class _StubRemediator:
     def __init__(self):
         self.calls = []
 
-    def analyze(self, raw_log_text, success_logs=None):
+    def analyze(self, raw_log_text, success_logs=None, preprocessing_mode="curated"):
         self.calls.append(
             {
                 "method": "analyze",
                 "raw_log_text": raw_log_text,
                 "success_logs": success_logs,
+                "preprocessing_mode": preprocessing_mode,
             }
         )
         return RCAReport(
@@ -45,6 +46,7 @@ class _StubRemediator:
         replay=False,
         job=None,
         verification_profile="strict",
+        preprocessing_mode="curated",
     ):
         self.calls.append(
             {
@@ -55,6 +57,7 @@ class _StubRemediator:
                 "replay": replay,
                 "job": job,
                 "verification_profile": verification_profile,
+                "preprocessing_mode": preprocessing_mode,
             }
         )
         return {
@@ -216,6 +219,7 @@ def test_evaluate_benchmark_split_and_write_predictions(tmp_path):
     assert report["summary"]["repo_resolution_counts"]["not_provided"] == 1
     assert remediator.calls[0]["method"] == "analyze"
     assert remediator.calls[0]["success_logs"] == ["success 1\nsuccess 2\n"]
+    assert remediator.calls[0]["preprocessing_mode"] == "curated"
 
     report_path = tmp_path / "report.json"
     predictions_path = tmp_path / "predictions.jsonl"
@@ -234,6 +238,8 @@ def test_evaluate_benchmark_split_and_write_predictions(tmp_path):
     assert case_artifact["incident_id"] == "INC2001"
     assert case_artifact["run"]["benchmark_mode"] == "component"
     assert case_artifact["run"]["verification_profile"] == "strict"
+    assert case_artifact["run"]["preprocessing_mode"] == "curated"
+    assert case_artifact["run"]["use_success_logs"] is True
     assert "execution" not in case_artifact
     assert "remediation" not in case_artifact
     assert "verification" not in case_artifact
@@ -352,4 +358,4 @@ def test_default_benchmark_artifact_dir_uses_benchmark_exports(tmp_path):
         partition="dev",
         model="gpt-4o-mini",
     )
-    assert path == root / "exports" / "evaluations" / "component_real_reviewed19_primary__dev__gpt-4o-mini"
+    assert path == root / "exports" / "evaluations" / "component_real_reviewed19_primary__dev__gpt-4o-mini__curated"

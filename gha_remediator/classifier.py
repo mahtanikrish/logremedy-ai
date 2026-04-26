@@ -5,6 +5,13 @@ def classify_failure(text: str) -> FailureClass:
     # Coarse rule-based failure classification
     msg = text.lower()
 
+    if "transitive_update_not_possible" in msg:
+        return "environment_dependency_failure"
+    if "dependabot encountered" in msg and "error performing the update" in msg:
+        return "environment_dependency_failure"
+    if "latest possible version that can be installed is" in msg and "conflicting dependencies" in msg:
+        return "environment_dependency_failure"
+
     if "no matching distribution found" in msg or "could not find a version that satisfies" in msg:
         return "environment_dependency_failure"
     if "modulenotfounderror" in msg or "no module named" in msg:

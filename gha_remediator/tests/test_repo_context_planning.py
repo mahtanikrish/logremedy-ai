@@ -290,10 +290,14 @@ def test_pipeline_run_builds_repo_context_before_planning(tmp_path):
 
     result = remediator.run(raw_log_text=raw_log, repo=str(tmp_path), replay=False, job=None)
 
-    assert result["verification"]["status"] == "accepted"
+    assert result["verification"]["status"] == "inconclusive"
+    assert result["verification"]["reason"] == "inconclusive because validator node_workspace could not validate this case"
     assert result["rca"]["confidence"] == 0.92
     assert result["rca"]["evidence_line_numbers"] == [2]
     assert result["rca"]["notes"] == ["The source file imports a path that resolves inside src/utils."]
+    assert result["remediation"]["fix_type"] == "node_typescript_build_fix"
+    assert result["remediation"]["commands"] == ["npm ci", "npm run build"]
+    assert result["remediation"]["evidence"]["planner"] == "template_fallback"
     repo_context = result["remediation"]["evidence"]["repo_context"]
     assert any(item["path"] == "frontend/src/index.ts" for item in repo_context["candidate_files"])
     assert any(item["path"] == "frontend/src/utils/helper.ts" for item in repo_context["candidate_files"])
@@ -321,3 +325,108 @@ def test_pipeline_run_without_repo_skips_verification_and_preserves_planning():
     assert result["verification"]["status"] == "inconclusive"
     assert result["verification"]["reason"] == "verification skipped: repo not provided"
     assert result["verification"]["evidence"]["capability"]["selected_validator"] == "none"
+
+
+def test_build_repo_context_marks_repo_slug_mismatch(tmp_path):
+    _seed_repo(tmp_path)
+    raw_log = "\n".join(
+        [
+            "Job defined at: ColorlibHQ/AdminLTE/.github/dependabot.yml@refs/heads/master",
+            "Starting security update job for ColorlibHQ/AdminLTE",
+        ]
+    )
+    report = _make_report("environment_dependency_failure", raw_log.splitlines())
+
+    repo_context = build_repo_context(str(tmp_path), raw_log, report)
+
+    assert repo_context.metadata["log_repo_slug"] == "ColorlibHQ/AdminLTE"
+    assert repo_context.metadata["repo_match"] is False
+    assert "log targets ColorlibHQ/AdminLTE" in repo_context.metadata["repo_mismatch_reason"]
+
+
+def test_pipeline_without_repo_dependabot_conflict_uses_node_dependency_template():
+    raw_log = "\n".join(
+        [
+            "Starting security update job for ColorlibHQ/AdminLTE",
+            "Checking if prismjs 1.29.0 needs updating",
+            "Latest version is 1.30.0",
+            "The latest possible version that can be installed is 1.29.0 because of the following conflicting dependencies:",
+            "@astrojs/mdx@4.0.6 requires prismjs@^1.29.0 via a transitive dependency on @astrojs/prism@3.2.0",
+            "astro@5.1.7 requires prismjs@^1.29.0 via a transitive dependency on @astrojs/prism@3.2.0",
+            "Dependabot encountered '1' error(s) during execution, please check the logs for more details.",
+            "| transitive_update_not_possible |",
+            "##[error]Dependabot encountered an error performing the update",
+        ]
+    )
+    remediator = GHARemediator(kb=KnowledgeBase([]), llm=None)
+
+    result = remediator.run(raw_log_text=raw_log, repo=None, replay=False, job=None)
+
+    assert result["rca"]["failure_class"] == "environment_dependency_failure"
+    assert result["rca"]["root_cause_label"] == "dependabot_transitive_dependency_conflict"
+    assert result["remediation"]["fix_type"] == "node_transitive_dependency_conflict"
+    assert result["remediation"]["commands"] == [
+        "npm outdated @astrojs/mdx astro",
+        "npm install @astrojs/mdx@latest astro@latest",
+    ]
+
+
+def test_pipeline_uses_provided_repo_despite_slug_basename_mismatch(tmp_path):
+    _seed_repo(tmp_path)
+    raw_log = "\n".join(
+        [
+            "Job defined at: ColorlibHQ/AdminLTE/.github/dependabot.yml@refs/heads/master",
+            "Starting security update job for ColorlibHQ/AdminLTE",
+            "Checking if prismjs 1.29.0 needs updating",
+            "The latest possible version that can be installed is 1.29.0 because of the following conflicting dependencies:",
+            "| transitive_update_not_possible |",
+            "##[error]Dependabot encountered an error performing the update",
+        ]
+    )
+    remediator = GHARemediator(kb=KnowledgeBase([]), llm=None)
+
+    result = remediator.run(raw_log_text=raw_log, repo=str(tmp_path), replay=False, job=None)
+
+    repo_context = result["remediation"]["evidence"]["repo_context"]
+    assert repo_context["metadata"]["repo_match"] is False
+    assert repo_context["metadata"]["log_repo_slug"] == "ColorlibHQ/AdminLTE"
+    assert "repo_context_ignored_reason" not in result["remediation"]["evidence"]
+    assert result["verification"]["status"] == "inconclusive"
+    assert result["verification"]["reason"] != repo_context["metadata"]["repo_mismatch_reason"]
+    assert result["verification"]["evidence"]["gate"] != "preconditions"
+
+
+def test_propose_fix_backfills_guidance_for_specific_test_failure():
+    report = RCAReport(
+        failure_class="test_failure",
+        key_lines=[
+            LogLine(342, "Ensure extractor classes are named CategorySubcategoryExtractor ... FAIL"),
+            LogLine(353, "FAIL: test_names (test_extractor.TestExtractorModule)"),
+            LogLine(359, "AssertionError: 'HatenablogArchiveExtractor' != 'HatenaBlogArchiveExtractor'"),
+            LogLine(370, "make: *** [Makefile:22: test] Error 1"),
+        ],
+        blocks=[],
+        root_causes=[
+            "The extractor class name 'HatenablogArchiveExtractor' does not match the expected name 'HatenaBlogArchiveExtractor'."
+        ],
+        root_cause_label="extractor_class_name_mismatch",
+        root_cause_text="The extractor class name casing does not match the expected format.",
+        metadata={},
+    )
+    repo_context = RepoContext(
+        repo_root="/tmp/repo",
+        tree_entries=[],
+        manifests=[],
+        lockfiles=[],
+        workflow_files=[],
+        candidate_files=[RepoCandidateFile(path="test/test_extractor.py", reason="python traceback location", line_hint=188)],
+    )
+
+    plan = GHARemediator(kb=KnowledgeBase([]), llm=None).propose_fix(report, docs=[], repo_context=repo_context)
+
+    assert plan.fix_type == "test_reproduce_and_hint"
+    assert plan.commands == []
+    assert plan.guidance
+    assert any("HatenaBlogArchiveExtractor" in item for item in plan.guidance)
+    assert any("make test" in item for item in plan.guidance)
+    assert plan.evidence["guidance_fallback"]["applied"] is True

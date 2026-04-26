@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import argparse
 import json
 import os
 from pathlib import Path
@@ -8,7 +9,9 @@ from typing import Any, Dict
 from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import RequestEntityTooLarge
 
+from .app_settings import AppSettings, load_app_settings, save_app_settings, settings_payload
 from .services.analysis_runtime import (
+    describe_kb,
     run_github_analysis,
     run_synthetic_analysis,
     run_synthetic_analysis_text,
@@ -38,6 +41,26 @@ def create_app() -> Flask:
             return Response(status=204)
         return jsonify({"status": "ok"})
 
+    @app.route("/api/settings", methods=["GET", "POST", "OPTIONS"])
+    def settings() -> Response:
+        if request.method == "OPTIONS":
+            return Response(status=204)
+
+        if request.method == "GET":
+            payload = settings_payload()
+            payload["knowledgeBase"].update(describe_kb())
+            return jsonify(payload)
+
+        payload = _json_payload()
+        settings = AppSettings(
+            knowledge_base_path=str(payload.get("knowledgeBasePath", "")).strip(),
+            env_file_path=str(payload.get("envFilePath", "")).strip(),
+        )
+        save_app_settings(settings)
+        response_payload = settings_payload(settings)
+        response_payload["knowledgeBase"].update(describe_kb(settings))
+        return jsonify(response_payload)
+
     @app.errorhandler(RequestEntityTooLarge)
     def handle_large_upload(_: RequestEntityTooLarge) -> tuple[Response, int]:
         return jsonify({"error": "Uploaded log file is too large. Keep uploads under 100 MB for now."}), 413
@@ -53,14 +76,14 @@ def create_app() -> Flask:
             log_path = ""
             log_name = uploaded_file.filename or "uploaded.log"
             raw_log_text = uploaded_file.read().decode("utf-8", errors="replace")
-            repo = str(request.form.get("repo", "")).strip() or "."
+            repo = str(request.form.get("repo", "")).strip()
             model = str(request.form.get("model", "")).strip() or "gpt-4o-mini"
         else:
             payload = _json_payload()
             log_path = str(payload.get("logPath", "")).strip()
             log_name = str(payload.get("logName", "")).strip()
             raw_log_text = str(payload.get("rawLogText", ""))
-            repo = str(payload.get("repo", "")).strip() or "."
+            repo = str(payload.get("repo", "")).strip()
             model = str(payload.get("model", "")).strip() or "gpt-4o-mini"
 
         if not log_path and not raw_log_text.strip():
@@ -92,7 +115,7 @@ def create_app() -> Flask:
 
         payload = _json_payload()
         repo_name = str(payload.get("repoName", "")).strip()
-        verify_repo = str(payload.get("verifyRepo", "")).strip() or "."
+        verify_repo = str(payload.get("verifyRepo", "")).strip()
         model = str(payload.get("model", "")).strip() or "gpt-4o-mini"
         run_id_value = payload.get("runId")
         run_id = int(run_id_value) if str(run_id_value).strip() else None
@@ -196,10 +219,22 @@ python -m gha_remediator.web_app</pre>
 </html>"""
 
 
+def build_arg_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="Run the gha-remediator Flask web app")
+    parser.add_argument("--host", default="127.0.0.1", help="Host interface to bind")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("PORT", "8000")),
+        help="Port to bind",
+    )
+    return parser
+
+
 def main() -> None:
+    args = build_arg_parser().parse_args()
     app = create_app()
-    port = int(os.environ.get("PORT", "8000"))
-    app.run(host="127.0.0.1", port=port, debug=False)
+    app.run(host=args.host, port=args.port, debug=False)
 
 
 if __name__ == "__main__":

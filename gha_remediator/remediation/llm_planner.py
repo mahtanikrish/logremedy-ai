@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from ..types import RCAReport, RemediationPlan, Patch, RepoContext
 from ..rag import Doc
-from ..llm.base import LLMClient, LLMConfig
+from ..llm.base import LLMClient, LLMConfig, last_response_metadata
 from .. import prompts
 from ..repo_context import format_repo_context
 
@@ -41,6 +41,7 @@ def plan_with_llm(
         schema_hint=prompts.PLAN_SCHEMA_HINT,
         cfg=llm_cfg,
     )
+    llm_meta = last_response_metadata(llm)
 
     patches = [Patch(path=p.get("path",""), diff=p.get("diff","")) for p in out.get("patches", []) if p.get("path")]
     return RemediationPlan(
@@ -51,9 +52,11 @@ def plan_with_llm(
         assumptions=[str(a) for a in out.get("assumptions", [])],
         rollback=[str(r) for r in out.get("rollback", [])],
         risk_level=str(out.get("risk_level", "medium")),
+        guidance=[str(item) for item in out.get("guidance", []) if str(item).strip()],
         evidence={
             "planner": "llm",
             "repo_context_used": repo_context is not None,
             "retrieved_docs": [{"id": d.doc_id, "title": d.title, "source": d.source} for d in docs],
+            "llm": llm_meta,
         },
     )

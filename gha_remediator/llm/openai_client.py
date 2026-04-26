@@ -17,10 +17,12 @@ class OpenAIResponsesClient(LLMClient):
 
         self._OpenAI = OpenAI
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY")
+        self.last_response_metadata: Dict[str, Any] = {}
 
     def generate_json(self, *, system: str, user: str, schema_hint: str, cfg: LLMConfig) -> Dict[str, Any]:
         if not self._api_key:
             raise RuntimeError("OPENAI_API_KEY not set")
+        self.last_response_metadata = {}
 
         client = self._OpenAI(api_key=self._api_key)
 
@@ -40,6 +42,18 @@ class OpenAIResponsesClient(LLMClient):
             kwargs["reasoning_effort"] = cfg.reasoning_effort
 
         resp = client.responses.create(**kwargs)
+        usage = getattr(resp, "usage", None)
+        usage_payload: Dict[str, Any] = {}
+        if usage is not None:
+            usage_payload = {
+                "prompt_tokens": getattr(usage, "input_tokens", None),
+                "completion_tokens": getattr(usage, "output_tokens", None),
+                "total_tokens": getattr(usage, "total_tokens", None),
+            }
+        self.last_response_metadata = {
+            "model": cfg.model,
+            "usage": usage_payload,
+        }
         text = getattr(resp, "output_text", None)
         if text is None:
             text = str(resp)

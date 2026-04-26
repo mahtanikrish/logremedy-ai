@@ -111,6 +111,12 @@ def main():
         default="strict",
         help="Verification policy profile to use when a repo is provided",
     )
+    runp.add_argument(
+        "--preprocessing-mode",
+        choices=["curated", "raw_tail"],
+        default="curated",
+        help="RCA input mode: curated uses filtering/expansion/pruning; raw_tail uses the raw log tail within budget",
+    )
     runp.add_argument("--out", default=None, help="Write JSON output to file")
 
     runp.add_argument("--model", default="gpt-4o-mini", help="Model name (default gpt-4o-mini)")
@@ -132,6 +138,12 @@ def main():
         choices=["strict", "benchmark_supported_files"],
         default="strict",
         help="Verification policy profile to use when a repo is provided",
+    )
+    evalp.add_argument(
+        "--preprocessing-mode",
+        choices=["curated", "raw_tail"],
+        default="curated",
+        help="RCA input mode: curated uses filtering/expansion/pruning; raw_tail uses the raw log tail within budget",
     )
     evalp.add_argument("--out", default="results/synthetic_eval.json", help="Write evaluation report to file")
     evalp.add_argument("--model", default="gpt-4o-mini", help="Model name (default gpt-4o-mini)")
@@ -166,6 +178,12 @@ def main():
     benchmarkp.add_argument("--max-retries", type=int, default=2, help="Retries per incident for transient LLM/API failures")
     benchmarkp.add_argument("--resume", action="store_true", help="Resume from an existing benchmark report if present")
     benchmarkp.add_argument("--no-success-logs", action="store_true", help="Do not pass incident success_log.txt into preprocessing/RCA")
+    benchmarkp.add_argument(
+        "--preprocessing-mode",
+        choices=["curated", "raw_tail"],
+        default="curated",
+        help="RCA input mode: curated uses filtering/expansion/pruning; raw_tail uses the raw log tail within budget",
+    )
     benchmarkp.add_argument("--model", default="gpt-4o-mini", help="Model name (default gpt-4o-mini)")
     benchmarkp.add_argument("--reasoning-effort", default=None, help="Optional reasoning effort (e.g. medium/high)")
     benchmarkp.add_argument("--temperature", type=float, default=None, help="Optional temperature")
@@ -234,6 +252,7 @@ def main():
             max_retries=args.max_retries,
             existing_report=existing_report,
             verification_profile=args.verification_profile,
+            preprocessing_mode=args.preprocessing_mode,
         )
         write_evaluation_report(report, args.out)
         print(json.dumps(report["summary"], indent=2))
@@ -249,6 +268,7 @@ def main():
                 split=args.split,
                 partition=args.partition,
                 model=args.model,
+                preprocessing_mode=args.preprocessing_mode,
             )
         )
         artifact_report_path = artifact_dir / "report.json"
@@ -284,6 +304,7 @@ def main():
             batch_number=args.batch_number,
             benchmark_mode=args.benchmark_mode,
             verification_profile=args.verification_profile,
+            preprocessing_mode=args.preprocessing_mode,
         )
         write_benchmark_artifacts(
             artifact_root=artifact_dir,
@@ -300,6 +321,7 @@ def main():
                 "batch_number": args.batch_number,
                 "benchmark_mode": report.get("benchmark_mode", args.benchmark_mode),
                 "verification_profile": args.verification_profile,
+                "preprocessing_mode": args.preprocessing_mode,
                 "replay": args.replay,
                 "use_success_logs": not args.no_success_logs,
                 "max_retries": args.max_retries,
@@ -328,6 +350,7 @@ def main():
         replay=args.replay,
         job=args.job,
         verification_profile=args.verification_profile,
+        preprocessing_mode=args.preprocessing_mode,
     )
 
     _write_or_print(result, args.out)

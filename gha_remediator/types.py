@@ -96,6 +96,7 @@ class RemediationPlan:
     assumptions: List[str]
     rollback: List[str]
     risk_level: str  # low/medium/high
+    guidance: List[str] = field(default_factory=list)
     evidence: Dict[str, Any] = field(default_factory=dict)
 
 @dataclass

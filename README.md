@@ -67,7 +67,6 @@ The core research contribution. Gates run sequentially; the first failure short-
 
 - Python 3.10+
 - `pip install -e .` to install the package in editable mode
-- `pip install pyyaml` — required for workflow YAML static validation
 - [`act`](https://github.com/nektos/act) — required for `--replay` (Gate D CI replay)
 
 ---
@@ -193,8 +192,7 @@ If you want plan-only synthetic evaluation without a checkout, `--repo` is optio
 ## Running Tests
 
 ```bash
-pip install -e .
-pip install pytest pyyaml
+pip install -e ".[dev]"
 pytest -v
 ```
 

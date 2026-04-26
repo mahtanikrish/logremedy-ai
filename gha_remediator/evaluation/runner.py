@@ -63,6 +63,7 @@ def _run_case_with_retries(
     replay: bool,
     max_retries: int,
     verification_profile: VerificationProfile,
+    preprocessing_mode: str,
 ) -> Dict[str, Any]:
     last_error: Optional[Exception] = None
     attempts = max(1, max_retries + 1)
@@ -74,6 +75,7 @@ def _run_case_with_retries(
                 replay=replay,
                 job=None,
                 verification_profile=verification_profile,
+                preprocessing_mode=preprocessing_mode,
             )
         except requests.HTTPError as e:
             last_error = e
@@ -144,6 +146,7 @@ def evaluate_synthetic_dataset(
     max_retries: int = 2,
     existing_report: Optional[Dict[str, Any]] = None,
     verification_profile: VerificationProfile = "strict",
+    preprocessing_mode: str = "curated",
 ) -> Dict[str, Any]:
     logs = load_failure_logs(root=root, limit=limit, with_ground_truth=True)
     prior_cases = list((existing_report or {}).get("cases", []))
@@ -167,6 +170,7 @@ def evaluate_synthetic_dataset(
                 replay=replay,
                 max_retries=max_retries,
                 verification_profile=verification_profile,
+                preprocessing_mode=preprocessing_mode,
             )
             expected_class = expected_failure_class(ground_truth)
             predicted_class = result["rca"]["failure_class"]

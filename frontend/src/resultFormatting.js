@@ -51,6 +51,48 @@ function keyLineText(item) {
   return `Line ${item?.lineno ?? "?"}: ${line || "No text captured."}`;
 }
 
+function summarizePatch(patch) {
+  const path = String(patch?.path || "").trim() || "unknown file";
+  return `Review the proposed patch for ${path}.`;
+}
+
+function proposedChangeBullets(remediation) {
+  if (remediation.patches?.length) {
+    return remediation.patches.map(summarizePatch);
+  }
+  if (remediation.commands?.length) {
+    return remediation.commands;
+  }
+  if (remediation.guidance?.length) {
+    return remediation.guidance;
+  }
+  return ["No concrete remediation commands were returned."];
+}
+
+function verificationWasSkipped(verification) {
+  const reason = String(verification?.reason || "").toLowerCase();
+  const summary = String(verification?.evidence?.capability?.summary || "").toLowerCase();
+  return reason.startsWith("verification skipped:")
+    || summary.startsWith("verification skipped");
+}
+
+function verificationEvidenceGroup(verification) {
+  if (verificationWasSkipped(verification)) {
+    return {
+      title: "Evidence",
+      body: "Verification was skipped, so no evidence was collected.",
+      bullets: [],
+    };
+  }
+
+  const bullets = flattenEvidence(verification.evidence);
+  return {
+    title: "Evidence",
+    body: "Signals collected from the current verification stage.",
+    bullets,
+  };
+}
+
 export function emptyResultState() {
   return {
     summary: {
@@ -106,6 +148,34 @@ export function formatResultPayload(result, rawLog) {
   const rca = result?.rca || {};
   const remediation = result?.remediation || {};
   const verification = result?.verification || {};
+  const remediationGroups = [
+    {
+      title: "Proposed Change",
+      body: `Risk level: ${sentenceCase(remediation.risk_level)}`,
+      bullets: proposedChangeBullets(remediation),
+    },
+  ];
+
+  if (remediation.guidance?.length && (remediation.patches?.length || remediation.commands?.length)) {
+    remediationGroups.push({
+      title: "Developer Guidance",
+      body: "Concrete checks to help a developer inspect and complete the fix safely.",
+      bullets: remediation.guidance,
+    });
+  }
+
+  remediationGroups.push(
+    {
+      title: "Assumptions",
+      body: "Conditions that need to hold for the proposed fix to be valid.",
+      bullets: remediation.assumptions?.length ? remediation.assumptions : ["No assumptions were listed."],
+    },
+    {
+      title: "Rollback Plan",
+      body: "How to safely reverse the suggested change.",
+      bullets: remediation.rollback?.length ? remediation.rollback : ["No rollback steps were provided."],
+    },
+  );
 
   return {
     summary: {
@@ -131,23 +201,7 @@ export function formatResultPayload(result, rawLog) {
       },
       remediation: {
         headline: `${sentenceCase(remediation.fix_type)} fix`,
-        groups: [
-          {
-            title: "Proposed Change",
-            body: `Risk level: ${sentenceCase(remediation.risk_level)}`,
-            bullets: remediation.commands?.length ? remediation.commands : ["No concrete remediation commands were returned."],
-          },
-          {
-            title: "Assumptions",
-            body: "Conditions that need to hold for the proposed fix to be valid.",
-            bullets: remediation.assumptions?.length ? remediation.assumptions : ["No assumptions were listed."],
-          },
-          {
-            title: "Rollback Plan",
-            body: "How to safely reverse the suggested change.",
-            bullets: remediation.rollback?.length ? remediation.rollback : ["No rollback steps were provided."],
-          },
-        ],
+        groups: remediationGroups,
       },
       verification: {
         headline: sentenceCase(verification.status),
@@ -157,13 +211,7 @@ export function formatResultPayload(result, rawLog) {
             body: verification.reason || "No verification explanation returned.",
             bullets: [],
           },
-          {
-            title: "Evidence",
-            body: "Signals collected from the current verification stage.",
-            bullets: flattenEvidence(verification.evidence).length
-              ? flattenEvidence(verification.evidence)
-              : ["No verification evidence was returned."],
-          },
+          verificationEvidenceGroup(verification),
         ],
       },
       rawLog: rawLog || "No raw log captured for this run.",

@@ -113,6 +113,16 @@ def test_capability_exists_on_precondition_rejection():
     assert capability["execution_mode"] == "deterministic"
 
 
+def test_empty_plan_is_rejected_as_unappliable(tmp_path):
+    result = verify_plan(_make_plan(), repo=str(tmp_path))
+
+    capability = _capability(result)
+    assert result.status == "rejected_unappliable"
+    assert result.reason == "remediation plan has no actionable patches or commands"
+    assert capability["selected_validator"] == "none"
+    assert capability["outcome"] == "rejected"
+
+
 def test_capability_exists_on_adapter_inconclusive(monkeypatch, tmp_path):
     target = tmp_path / "timeseries"
     target.mkdir()
@@ -736,7 +746,7 @@ def test_pytest_target_derives_single_grounded_target(monkeypatch, tmp_path):
         workflow_files=[],
         candidate_files=[RepoCandidateFile(path="pkg/app.py", reason="error location from log")],
     )
-    plan = _make_plan(failure_class="test_failure")
+    plan = _make_plan(failure_class="test_failure", commands=["pytest"])
 
     result = verify_plan(plan, repo=str(tmp_path), report=report, repo_context=repo_context)
 
@@ -760,7 +770,7 @@ def test_pytest_target_no_grounded_target_is_inconclusive(monkeypatch, tmp_path)
         workflow_files=[],
         candidate_files=[RepoCandidateFile(path="pkg/app.py", reason="error location from log")],
     )
-    plan = _make_plan(failure_class="test_failure")
+    plan = _make_plan(failure_class="test_failure", commands=["pytest"])
 
     result = verify_plan(plan, repo=str(tmp_path), report=report, repo_context=repo_context)
 
@@ -789,7 +799,7 @@ def test_pytest_target_multiple_grounded_targets_is_inconclusive(monkeypatch, tm
         workflow_files=[],
         candidate_files=[RepoCandidateFile(path="pkg/app.py", reason="error location from log")],
     )
-    plan = _make_plan(failure_class="test_failure")
+    plan = _make_plan(failure_class="test_failure", commands=["pytest"])
 
     result = verify_plan(plan, repo=str(tmp_path), report=report, repo_context=repo_context)
 
@@ -812,7 +822,7 @@ def test_pytest_target_missing_pytest_is_inconclusive(monkeypatch, tmp_path):
         workflow_files=[],
         candidate_files=[RepoCandidateFile(path="tests/test_app.py", reason="error location from log")],
     )
-    plan = _make_plan(failure_class="test_failure")
+    plan = _make_plan(failure_class="test_failure", commands=["pytest"])
 
     result = verify_plan(plan, repo=str(tmp_path), report=report, repo_context=repo_context)
 
@@ -841,7 +851,7 @@ def test_adapter_timeout_is_inconclusive(monkeypatch, tmp_path):
         workflow_files=[],
         candidate_files=[RepoCandidateFile(path="tests/test_app.py", reason="error location from log")],
     )
-    plan = _make_plan(failure_class="test_failure")
+    plan = _make_plan(failure_class="test_failure", commands=["pytest"])
 
     result = verify_plan(plan, repo=str(tmp_path), report=report, repo_context=repo_context)
 

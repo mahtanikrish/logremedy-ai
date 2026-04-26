@@ -269,6 +269,24 @@ def verify_plan(
             )
         )
 
+        if not plan.patches and not plan.commands:
+            gates.append(
+                _gate_result(
+                    "grounding",
+                    "failed",
+                    "remediation plan has no actionable patches or commands",
+                    {"fix_type": plan.fix_type},
+                )
+            )
+            return _result(
+                status="rejected_unappliable",
+                reason="remediation plan has no actionable patches or commands",
+                terminal_gate="grounding",
+                gates=gates,
+                capability=early_exit_capability(summary="verification rejected because remediation plan is empty"),
+                extra={"fix_type": plan.fix_type},
+            )
+
         grounding = evaluate_grounding(
             plan,
             repo=repo,

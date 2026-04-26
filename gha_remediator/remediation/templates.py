@@ -32,10 +32,68 @@ def _extract_no_matching_dist(text: str) -> Optional[str]:
         return m.group(1)
     return None
 
+
+def _looks_like_dependabot_transitive_conflict(text: str) -> bool:
+    lowered = text.lower()
+    return (
+        "transitive_update_not_possible" in lowered
+        or (
+            "dependabot encountered" in lowered
+            and "error performing the update" in lowered
+        )
+        or (
+            "latest possible version that can be installed is" in lowered
+            and "conflicting dependencies" in lowered
+        )
+    )
+
+
+def _extract_dependabot_conflict_details(text: str) -> Dict[str, Any]:
+    details: Dict[str, Any] = {}
+
+    package_match = re.search(
+        r"checking if\s+([a-zA-Z0-9_@./-]+)\s+([0-9][a-zA-Z0-9_.-]*)\s+needs updating",
+        text,
+        re.IGNORECASE,
+    )
+    if package_match:
+        details["package"] = package_match.group(1)
+        details["current_version"] = package_match.group(2)
+
+    latest_match = re.search(
+        r"latest version is\s+([0-9][a-zA-Z0-9_.-]*)",
+        text,
+        re.IGNORECASE,
+    )
+    if latest_match:
+        details["latest_version"] = latest_match.group(1)
+
+    blocker_pattern = re.compile(
+        r"([a-zA-Z0-9_@./-]+)@([0-9][a-zA-Z0-9_.-]*)\s+requires\s+([a-zA-Z0-9_@./-]+)@([^\s]+)",
+        re.IGNORECASE,
+    )
+    blockers: List[str] = []
+    constraints: List[str] = []
+    for match in blocker_pattern.finditer(text):
+        blockers.append(match.group(1))
+        constraints.append(f"{match.group(1)} requires {match.group(3)}@{match.group(4)}")
+    if blockers:
+        details["blockers"] = list(dict.fromkeys(blockers))[:4]
+    if constraints:
+        details["constraints"] = list(dict.fromkeys(constraints))[:4]
+
+    return details
+
 def choose_template(report: RCAReport, repo_context: Optional[RepoContext] = None) -> TemplateMatch:
     blob = "\n".join([l.text for l in report.key_lines[:200]])
 
     if report.failure_class == "environment_dependency_failure":
+        if _looks_like_dependabot_transitive_conflict(blob):
+            return TemplateMatch(
+                "node_transitive_dependency_conflict",
+                0.9,
+                _extract_dependabot_conflict_details(blob),
+            )
         mod = _extract_missing_module(blob)
         if mod:
             return TemplateMatch("python_add_dependency", 0.9, {"module": mod})
@@ -73,6 +131,28 @@ def render_plan(
     assumptions: List[str] = []
     rollback: List[str] = []
     risk = "low"
+
+    def _node_command(command: str, *packages: str) -> str:
+        selected = [pkg for pkg in packages if pkg]
+        if tm.fix_type == "node_transitive_dependency_conflict":
+            package_manager = detect_primary_package_manager(repo_context) or "npm"
+        else:
+            package_manager = detect_primary_package_manager(repo_context) or "npm"
+        if package_manager == "pnpm":
+            if command == "outdated":
+                return "pnpm outdated" + (f" {' '.join(selected)}" if selected else "")
+            if command == "update_latest":
+                return "pnpm up --latest" + (f" {' '.join(selected)}" if selected else "")
+        if package_manager == "yarn":
+            if command == "outdated":
+                return "yarn outdated" + (f" {' '.join(selected)}" if selected else "")
+            if command == "update_latest":
+                return "yarn upgrade" + (f" {' '.join(f'{pkg}@latest' for pkg in selected)}" if selected else "")
+        if command == "outdated":
+            return "npm outdated" + (f" {' '.join(selected)}" if selected else "")
+        if command == "update_latest":
+            return "npm install" + (f" {' '.join(f'{pkg}@latest' for pkg in selected)}" if selected else "")
+        raise ValueError(f"unsupported command kind: {command}")
 
     if tm.fix_type == "python_add_dependency":
         mod = tm.extracted["module"]
@@ -130,6 +210,41 @@ def render_plan(
             assumptions = ["Workflow file path must be identified from error message."]
             rollback = ["git checkout -- .github/workflows/<file>.yml"]
         risk = "medium"
+
+    elif tm.fix_type == "node_transitive_dependency_conflict":
+        package = tm.extracted.get("package")
+        blockers = [str(item) for item in tm.extracted.get("blockers", []) if str(item).strip()]
+        constraints = [str(item) for item in tm.extracted.get("constraints", []) if str(item).strip()]
+        if blockers:
+            cmds = [
+                _node_command("outdated", *blockers),
+                _node_command("update_latest", *blockers),
+            ]
+        else:
+            cmds = [
+                _node_command("outdated"),
+                _node_command("update_latest"),
+            ]
+        assumptions = []
+        if package:
+            assumptions.append(
+                f"The blocked package is {package}; direct dependencies that constrain it must be updated before Dependabot can land the security fix."
+            )
+        else:
+            assumptions.append(
+                "A transitive dependency constraint is blocking Dependabot from applying the security update."
+            )
+        if constraints:
+            assumptions.append("Observed constraint chain: " + "; ".join(constraints[:3]) + ".")
+        assumptions.append("After updating the blocking direct dependencies, rerun the dependency update and confirm the vulnerable package can move to the fixed version.")
+        rollback = ["git checkout -- package.json package-lock.json yarn.lock pnpm-lock.yaml || true"]
+        risk = "medium"
+
+    elif tm.fix_type == "test_reproduce_and_hint":
+        cmds = []
+        assumptions = ["Inspect the failing assertion or traceback before changing the implementation or expected fixture."]
+        rollback = ["Revert the code or fixture changes if the targeted test still fails after the investigation."]
+        risk = "low"
 
     else:
         cmds = []

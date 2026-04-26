@@ -15,8 +15,13 @@ class GitHubModelsClient(LLMClient):
         if not self.token:
             raise RuntimeError("GITHUB_TOKEN not set")
 
-        self.base = "https://models.inference.ai.azure.com"
-        self.api_version = "2024-02-15-preview"
+        self.base = os.environ.get("GITHUB_MODELS_BASE", "https://models.inference.ai.azure.com")
+        self.api_version = os.environ.get("GITHUB_MODELS_API_VERSION", "2024-02-15-preview")
+        self.last_response_metadata: Dict[str, Any] = {}
+
+    @staticmethod
+    def _use_modern_endpoint(model: str) -> bool:
+        return "/" in model
 
     @staticmethod
     def _coerce_content_to_text(content: Any) -> str:
@@ -77,42 +82,74 @@ class GitHubModelsClient(LLMClient):
         schema_hint: str,
         cfg: LLMConfig,
     ) -> Dict[str, Any]:
+        self.last_response_metadata = {}
 
         deployment = cfg.model or "gpt-4o-mini"
-
-        url = (
-            f"{self.base}/openai/deployments/{deployment}/chat/completions"
-            f"?api-version={self.api_version}"
+        request_user = (
+            user
+            + "\n\nYou MUST output valid JSON only.\n"
+            + "Schema:\n"
+            + schema_hint
         )
 
-        payload = {
-            "model": deployment,
-            "messages": [
-                {"role": "system", "content": system},
-                {
-                    "role": "user",
-                    "content": (
-                        user
-                        + "\n\nYou MUST output valid JSON only.\n"
-                        + "Schema:\n"
-                        + schema_hint
-                    ),
-                },
-            ],
-            "temperature": cfg.temperature or 0,
-        }
-        if cfg.max_output_tokens is not None:
-            payload["max_tokens"] = cfg.max_output_tokens
+        messages = [
+            {"role": "system", "content": system},
+            {"role": "user", "content": request_user},
+        ]
+        temperature = cfg.temperature if cfg.temperature is not None else 0
 
-        headers = {
-            "api-key": self.token,          
-            "Content-Type": "application/json",
-        }
+        if self._use_modern_endpoint(deployment):
+            base = os.environ.get("GITHUB_MODELS_BASE", "https://models.github.ai/inference").rstrip("/")
+            url = f"{base}/chat/completions"
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {self.token}",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": deployment,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if cfg.max_output_tokens is not None:
+                payload["max_tokens"] = cfg.max_output_tokens
+            if cfg.reasoning_effort is not None:
+                payload["reasoning_effort"] = cfg.reasoning_effort
+        else:
+            url = (
+                f"{self.base}/openai/deployments/{deployment}/chat/completions"
+                f"?api-version={self.api_version}"
+            )
+            headers = {
+                "api-key": self.token,
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "model": deployment,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if cfg.max_output_tokens is not None:
+                payload["max_tokens"] = cfg.max_output_tokens
 
         r = requests.post(url, headers=headers, json=payload, timeout=60)
         r.raise_for_status()
 
         data = r.json()
+        usage = data.get("usage")
+        usage_payload: Dict[str, Any] = {}
+        if isinstance(usage, dict):
+            usage_payload = {
+                "prompt_tokens": usage.get("prompt_tokens"),
+                "completion_tokens": usage.get("completion_tokens"),
+                "total_tokens": usage.get("total_tokens"),
+            }
+        self.last_response_metadata = {
+            "model": deployment,
+            "endpoint": "modern" if self._use_modern_endpoint(deployment) else "legacy",
+            "usage": usage_payload,
+        }
         content = data["choices"][0]["message"]["content"]
         text = self._coerce_content_to_text(content)
         json_text = self._extract_json_text(text)

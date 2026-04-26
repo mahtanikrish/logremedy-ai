@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import List, Optional, Tuple, Iterable
+
+import tiktoken
 
 from .types import LogLine, LogBlock
 from .logs import line_matches_success_template
@@ -12,6 +15,7 @@ DEFAULT_KEYWORDS = [
     "err:", "err!", "failures:", "missing", "exception", "cannot",
     "modulenotfounderror", "traceback", "assertionerror", "permission denied",
 ]
+FALLBACK_TOKEN_ENCODINGS = ("o200k_base", "cl100k_base")
 
 @dataclass(frozen=True)
 class PreprocessConfig:
@@ -79,10 +83,78 @@ def key_log_expand(lines: List[LogLine], key_lines: List[LogLine], cfg: Preproce
         blocks.append(LogBlock(start=s, end=e, lines=blk_lines))
     return blocks
 
-def _approx_tokens(text: str) -> int:
+
+def _approximate_tokens(text: str) -> int:
+    if not text:
+        return 0
     return max(1, math.ceil(len(text) / 4))
 
-def token_overflow_prune(blocks: List[LogBlock], key_lines: List[LogLine], cfg: PreprocessConfig = PreprocessConfig(),) -> List[LogBlock]:
+
+def _encoding_model_candidates(model: Optional[str]) -> Iterable[str]:
+    if not model:
+        return ()
+    candidates = [model]
+    if "/" in model:
+        suffix = model.rsplit("/", 1)[-1]
+        if suffix not in candidates:
+            candidates.append(suffix)
+    return tuple(candidates)
+
+
+@lru_cache(maxsize=16)
+def _get_token_encoding(model: Optional[str]) -> Optional[tiktoken.Encoding]:
+    for candidate in _encoding_model_candidates(model):
+        try:
+            return tiktoken.encoding_for_model(candidate)
+        except KeyError:
+            continue
+        except Exception:
+            break
+    for encoding_name in FALLBACK_TOKEN_ENCODINGS:
+        try:
+            return tiktoken.get_encoding(encoding_name)
+        except KeyError:
+            continue
+        except Exception:
+            continue
+    return None
+
+
+def approx_tokens(text: str, model: Optional[str] = None) -> int:
+    if not text:
+        return 0
+    encoding = _get_token_encoding(model)
+    if encoding is None:
+        return _approximate_tokens(text)
+    return len(encoding.encode_ordinary(text))
+
+
+def raw_tail_select(
+    lines: List[LogLine],
+    cfg: PreprocessConfig = PreprocessConfig(),
+    model: Optional[str] = None,
+) -> List[LogLine]:
+    if not lines:
+        return []
+
+    selected: List[LogLine] = []
+    used = 0
+    for line in reversed(lines):
+        line_tokens = approx_tokens(line.text, model=model)
+        if selected and used + line_tokens > cfg.token_budget:
+            break
+        selected.append(line)
+        used += line_tokens
+
+    selected.reverse()
+    return selected
+
+def token_overflow_prune(
+    blocks: List[LogBlock],
+    key_lines: List[LogLine],
+    cfg: PreprocessConfig = PreprocessConfig(),
+    model: Optional[str] = None,
+) -> List[LogBlock]:
     
     # Rank blocks by weighted signal density and prune to token budget
     if not blocks:
@@ -115,10 +187,48 @@ def token_overflow_prune(blocks: List[LogBlock], key_lines: List[LogLine], cfg: 
     picked: List[LogBlock] = []
     used = 0
     for b in ranked:
-        t = _approx_tokens(b.to_text())
+        t = approx_tokens(b.to_text(), model=model)
         if used + t <= cfg.token_budget:
             picked.append(b)
             used += t
 
+    if not picked and ranked:
+        trimmed = _trim_block_to_budget(ranked[0], cfg=cfg, model=model)
+        if trimmed.lines:
+            return [trimmed]
+
     picked.sort(key=lambda b: b.start)
     return picked
+
+
+def _trim_block_to_budget(
+    block: LogBlock,
+    cfg: PreprocessConfig,
+    model: Optional[str] = None,
+) -> LogBlock:
+    if approx_tokens(block.to_text(), model=model) <= cfg.token_budget:
+        return block
+
+    selected: List[LogLine] = []
+    used = 0
+    for line in reversed(block.lines):
+        rendered = f"{line.lineno}: {line.text}"
+        line_tokens = approx_tokens(rendered, model=model)
+        if selected and used + line_tokens > cfg.token_budget:
+            break
+        selected.append(line)
+        used += line_tokens
+
+    if not selected and block.lines:
+        selected = [block.lines[-1]]
+
+    selected.reverse()
+    if not selected:
+        return LogBlock(start=block.start, end=block.end, lines=[], weight_density=block.weight_density)
+
+    return LogBlock(
+        start=selected[0].lineno,
+        end=selected[-1].lineno,
+        lines=selected,
+        weight_density=block.weight_density,
+    )

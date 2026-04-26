@@ -138,6 +138,11 @@ _SETUP_TOOL_VERSION_PATTERNS = {
         re.IGNORECASE,
     ),
 }
+_LOG_REPO_PATTERNS = (
+    re.compile(r"Job defined at:\s*(?P<slug>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", re.IGNORECASE),
+    re.compile(r"for\s+(?P<slug>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", re.IGNORECASE),
+    re.compile(r"github\.com/(?P<slug>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)", re.IGNORECASE),
+)
 
 
 def build_repo_context(repo: Optional[str], raw_log_text: str, report: RCAReport) -> RepoContext:
@@ -152,12 +157,19 @@ def build_repo_context(repo: Optional[str], raw_log_text: str, report: RCAReport
         )
 
     root = Path(repo).expanduser().resolve()
+    log_repo_slug = _extract_log_repo_slug(raw_log_text)
+    repo_match = _repo_matches_log_target(root, log_repo_slug)
     empty = RepoContext(
         repo_root=str(root),
         tree_entries=[],
         manifests=[],
         lockfiles=[],
         workflow_files=[],
+        metadata={
+            "log_repo_slug": log_repo_slug,
+            "repo_basename": root.name,
+            "repo_match": repo_match,
+        },
     )
 
     if not root.exists() or not root.is_dir():
@@ -187,6 +199,11 @@ def build_repo_context(repo: Optional[str], raw_log_text: str, report: RCAReport
         lockfiles=lockfiles,
         workflow_files=workflow_files,
     )
+    scan_meta["log_repo_slug"] = log_repo_slug
+    scan_meta["repo_basename"] = root.name
+    scan_meta["repo_match"] = repo_match
+    if repo_match is False and log_repo_slug:
+        scan_meta["repo_mismatch_reason"] = f"log targets {log_repo_slug} but provided repo is {root.name}"
 
     return RepoContext(
         repo_root=str(root),
@@ -201,6 +218,25 @@ def build_repo_context(repo: Optional[str], raw_log_text: str, report: RCAReport
         snippets=snippets,
         metadata=scan_meta,
     )
+
+
+def _extract_log_repo_slug(raw_log_text: str) -> Optional[str]:
+    for pattern in _LOG_REPO_PATTERNS:
+        match = pattern.search(raw_log_text)
+        if match:
+            return match.group("slug")
+    return None
+
+
+def _repo_matches_log_target(root: Path, log_repo_slug: Optional[str]) -> Optional[bool]:
+    if not log_repo_slug:
+        return None
+    repo_name = log_repo_slug.rsplit("/", 1)[-1]
+    return _normalize_repo_name(root.name) == _normalize_repo_name(repo_name)
+
+
+def _normalize_repo_name(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
 
 
 def format_repo_context(repo_context: RepoContext, max_chars: int = 8_000) -> str:

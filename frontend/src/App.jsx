@@ -1,17 +1,21 @@
-import { useMemo, useState } from "react";
-import { postFormData, postJson } from "./api";
+import { useEffect, useMemo, useState } from "react";
+import { getJson, postFormData, postJson } from "./api";
 import { emptyResultState, formatResultPayload } from "./resultFormatting";
 
 const INITIAL_FORM = {
   synthetic: {
     logName: "",
     rawLogText: "",
-    repo: "/Users/krishmahtani/Desktop/actions-log-generator",
+    repo: "",
   },
   github: {
     repoName: "",
     runId: "",
-    verifyRepo: "/Users/krishmahtani/Desktop/actions-log-generator",
+    verifyRepo: "",
+  },
+  settings: {
+    knowledgeBasePath: "",
+    envFilePath: "",
   },
 };
 
@@ -19,21 +23,31 @@ const PAGE_COPY = {
   synthetic: {
     title: "Synthetic Logs",
     description:
-      "Use a local failure log from the synthetic dataset and run the full LLM pipeline against a chosen verification repository.",
+      "Use a local failure log from the synthetic dataset and run the full LLM pipeline. Add a verification repository only when you have the matching local checkout.",
     tips: [
       "Choose a local .log file.",
-      "Check the repo path.",
+      "Leave the repo path blank to skip verification.",
       "Run the analysis.",
     ],
   },
   github: {
     title: "GitHub Logs",
     description:
-      "Fetch a recent failed GitHub Actions run, combine its logs, and analyze it against a local clone for verification.",
+      "Fetch a recent failed GitHub Actions run, combine its logs, and analyze it. Add a local clone only when you want verification.",
     tips: [
       "Enter owner/name.",
       "Leave run ID blank for the latest failed run.",
-      "Point verification to a local clone.",
+      "Leave verification blank to skip repo-based checks.",
+    ],
+  },
+  settings: {
+    title: "Settings",
+    description:
+      "Configure the retrieval knowledge base and the optional env file used to resolve GitHub credentials.",
+    tips: [
+      "Leave the knowledge base path blank to use the built-in defaults.",
+      "Set an env file path if you want the app to read GITHUB_TOKEN automatically.",
+      "Save settings before running analyses.",
     ],
   },
 };
@@ -55,16 +69,45 @@ function App() {
   const [errorText, setErrorText] = useState("");
   const [resultState, setResultState] = useState(emptyResultState());
   const [selectedSyntheticFile, setSelectedSyntheticFile] = useState(null);
+  const [settingsInfo, setSettingsInfo] = useState(null);
 
   const pageCopy = PAGE_COPY[page];
-  const summaryCards = useMemo(
-    () => [
+  const summaryCards = useMemo(() => {
+    if (page === "settings") {
+      return [
+        {
+          label: "Knowledge Base",
+          value: settingsInfo?.knowledgeBase?.configured
+            ? settingsInfo?.knowledgeBase?.docCount
+              ? `${settingsInfo.knowledgeBase.docCount} docs`
+              : "Configured"
+            : "Default",
+        },
+        {
+          label: "GitHub Token",
+          value: settingsInfo?.githubToken?.present
+            ? settingsInfo.githubToken.source === "env_file"
+              ? "Loaded from env file"
+              : "Loaded from environment"
+            : "Not available",
+        },
+        {
+          label: "Settings File",
+          value: settingsInfo?.settingsFilePath || "Not saved yet",
+        },
+      ];
+    }
+
+    return [
       { label: "Failure Class", value: resultState.summary.failureClass },
       { label: "Fix Type", value: resultState.summary.fixType },
       { label: "Verification", value: resultState.summary.verification },
-    ],
-    [resultState],
-  );
+    ];
+  }, [page, resultState, settingsInfo]);
+
+  useEffect(() => {
+    loadSettings();
+  }, []);
 
   function updateSyntheticField(field, value) {
     setForm((current) => ({
@@ -106,6 +149,52 @@ function App() {
     }));
   }
 
+  function updateSettingsField(field, value) {
+    setForm((current) => ({
+      ...current,
+      settings: {
+        ...current.settings,
+        [field]: value,
+      },
+    }));
+  }
+
+  async function loadSettings() {
+    try {
+      const data = await getJson("/api/settings");
+      setSettingsInfo(data);
+      setForm((current) => ({
+        ...current,
+        settings: {
+          knowledgeBasePath: data.settings?.knowledgeBasePath || "",
+          envFilePath: data.settings?.envFilePath || "",
+        },
+      }));
+    } catch (error) {
+      setErrorText(error.message);
+    }
+  }
+
+  async function saveSettings() {
+    setIsRunning(true);
+    setErrorText("");
+    setStatusText("Saving settings...");
+
+    try {
+      const data = await postJson("/api/settings", {
+        knowledgeBasePath: form.settings.knowledgeBasePath.trim(),
+        envFilePath: form.settings.envFilePath.trim(),
+      });
+      setSettingsInfo(data);
+      setStatusText("Settings saved.");
+    } catch (error) {
+      setErrorText(error.message);
+      setStatusText("Settings update failed.");
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
   async function runSynthetic() {
     if (!selectedSyntheticFile) {
       setErrorText("Choose a synthetic log file first.");
@@ -119,7 +208,7 @@ function App() {
     try {
       const formData = new FormData();
       formData.append("logFile", selectedSyntheticFile);
-      formData.append("repo", form.synthetic.repo || ".");
+      formData.append("repo", form.synthetic.repo.trim());
       formData.append("model", model);
 
       const data = await postFormData("/api/analyze/synthetic", formData);
@@ -148,7 +237,7 @@ function App() {
       const data = await postJson("/api/analyze/github", {
         repoName: form.github.repoName,
         runId: form.github.runId,
-        verifyRepo: form.github.verifyRepo || ".",
+        verifyRepo: form.github.verifyRepo.trim(),
         model,
       });
       setResultState(formatResultPayload(data.result, data.rawLog));
@@ -162,40 +251,12 @@ function App() {
     }
   }
 
-  function loadSampleSynthetic() {
-    setPage("synthetic");
-    setForm((current) => ({
-      ...current,
-      synthetic: {
-        logName: "log_2_20251121-164442.log",
-        rawLogText: "",
-        repo: "/Users/krishmahtani/Desktop/actions-log-generator",
-      },
-    }));
-    setSelectedSyntheticFile(null);
-    setStatusText("Choose a local log file to run synthetic analysis in the web app.");
-  }
-
-  function loadDemoGithub() {
-    setPage("github");
-    setForm((current) => ({
-      ...current,
-      github: {
-        repoName: "mahtanikrish/actions-log-generator",
-        runId: "",
-        verifyRepo: "/Users/krishmahtani/Desktop/actions-log-generator",
-      },
-    }));
-    setStatusText("Loaded demo GitHub case.");
-  }
-
   const activeSection = resultState.sections[activeTab];
 
   return (
     <div className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Final year project demo</p>
           <h1>Log Clinic</h1>
           <p className="subtitle">
             AI-powered GitHub Actions log analysis and remediation with verification-gated fixes.
@@ -221,6 +282,13 @@ function App() {
               type="button"
             >
               GitHub Logs
+            </button>
+            <button
+              className={page === "settings" ? "workflow-button active" : "workflow-button"}
+              onClick={() => setPage("settings")}
+              type="button"
+            >
+              Settings
             </button>
           </div>
 
@@ -264,21 +332,18 @@ function App() {
                 <input
                   value={form.synthetic.repo}
                   onChange={(event) => updateSyntheticField("repo", event.target.value)}
-                  placeholder="."
+                  placeholder="Optional local repo path"
                 />
-                <small>This local repo path is used by the verification checks.</small>
+                <small>Leave blank to skip verification, or provide the matching local repo for repo-aware checks.</small>
               </label>
 
               <div className="actions">
-                <button className="secondary-action" onClick={loadSampleSynthetic} type="button">
-                  Load Sample Case
-                </button>
                 <button className="primary-action" onClick={runSynthetic} disabled={isRunning} type="button">
                   {isRunning ? "Running..." : "Run Synthetic Analysis"}
                 </button>
               </div>
             </div>
-          ) : (
+          ) : page === "github" ? (
             <div className="form-card">
               <label className="field">
                 <span>GitHub repo (owner/name)</span>
@@ -305,17 +370,45 @@ function App() {
                 <input
                   value={form.github.verifyRepo}
                   onChange={(event) => updateGithubField("verifyRepo", event.target.value)}
-                  placeholder="."
+                  placeholder="Optional local repo path"
                 />
-                <small>Use a local clone of the same repo if you want meaningful verification results.</small>
+                <small>Leave blank to skip verification, or use a local clone of the same repo for verification.</small>
               </label>
 
               <div className="actions">
-                <button className="secondary-action" onClick={loadDemoGithub} type="button">
-                  Load Demo Repo
-                </button>
                 <button className="primary-action" onClick={runGithub} disabled={isRunning} type="button">
                   {isRunning ? "Running..." : "Run GitHub Analysis"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="form-card">
+              <label className="field">
+                <span>Knowledge base path</span>
+                <input
+                  value={form.settings.knowledgeBasePath}
+                  onChange={(event) => updateSettingsField("knowledgeBasePath", event.target.value)}
+                  placeholder="Optional file or directory path"
+                />
+                <small>Leave blank to use the built-in default knowledge base.</small>
+              </label>
+
+              <label className="field">
+                <span>Env file path</span>
+                <input
+                  value={form.settings.envFilePath}
+                  onChange={(event) => updateSettingsField("envFilePath", event.target.value)}
+                  placeholder="Optional .env file path"
+                />
+                <small>When set, the app will look for <code>GITHUB_TOKEN</code> in this file if it is not already in the environment.</small>
+              </label>
+
+              <div className="actions">
+                <button className="secondary-action" onClick={loadSettings} disabled={isRunning} type="button">
+                  Reload Settings
+                </button>
+                <button className="primary-action" onClick={saveSettings} disabled={isRunning} type="button">
+                  {isRunning ? "Saving..." : "Save Settings"}
                 </button>
               </div>
             </div>
@@ -334,54 +427,108 @@ function App() {
             ))}
           </div>
 
-          <div className="tab-row">
-            {TAB_ORDER.map((tab) => (
-              <button
-                className={activeTab === tab.key ? "tab-button active" : "tab-button"}
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                type="button"
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="result-surface">
-            {activeTab === "rawLog" ? (
+          {page === "settings" ? (
+            <div className="result-surface">
               <div className="report-view">
-                <article className="report-card raw-log-only-card">
-                  <div className="raw-log-panel">
-                    <pre className="raw-log-text">{resultState.sections.rawLog}</pre>
+                <article className="report-card">
+                  <h4>Knowledge Base</h4>
+                  <p>Current retrieval source used by the backend.</p>
+                  <div className="bullet-panel">
+                    <div className="bullet-line">
+                      <span className="bullet-mark">-</span>
+                      <span>
+                        {settingsInfo?.knowledgeBase?.configured
+                          ? settingsInfo?.knowledgeBase?.error
+                            ? settingsInfo.knowledgeBase.error
+                            : `Configured path: ${settingsInfo.knowledgeBase.path || form.settings.knowledgeBasePath}`
+                          : "Using the built-in default knowledge base."}
+                      </span>
+                    </div>
+                    <div className="bullet-line">
+                      <span className="bullet-mark">-</span>
+                      <span>
+                        {settingsInfo?.knowledgeBase?.docCount
+                          ? `${settingsInfo.knowledgeBase.docCount} document(s) available for retrieval.`
+                          : "No external knowledge base documents loaded."}
+                      </span>
+                    </div>
+                  </div>
+                </article>
+
+                <article className="report-card">
+                  <h4>GitHub Token</h4>
+                  <p>How the app will resolve authentication for GitHub log fetches and model calls.</p>
+                  <div className="bullet-panel">
+                    <div className="bullet-line">
+                      <span className="bullet-mark">-</span>
+                      <span>
+                        {settingsInfo?.githubToken?.present
+                          ? settingsInfo.githubToken.source === "env_file"
+                            ? `Token will be read from ${settingsInfo.githubToken.envFilePath}.`
+                            : "Token is already available in the process environment."
+                          : "No GitHub token is currently available."}
+                      </span>
+                    </div>
+                    <div className="bullet-line">
+                      <span className="bullet-mark">-</span>
+                      <span>Settings file: {settingsInfo?.settingsFilePath || "Not saved yet"}.</span>
+                    </div>
                   </div>
                 </article>
               </div>
-            ) : (
-              <div className="report-view">
-                <section className="report-hero">
-                  <h3>{activeSection.headline}</h3>
-                  <div className={`accent-bar accent-${activeTab}`} />
-                </section>
-
-                {activeSection.groups.map((group) => (
-                  <article className="report-card" key={group.title}>
-                    <h4>{group.title}</h4>
-                    <p>{group.body}</p>
-                    {group.bullets.length > 0 && (
-                      <div className="bullet-panel">
-                        {group.bullets.map((bullet) => (
-                          <div className="bullet-line" key={`${group.title}-${bullet}`}>
-                            <span className="bullet-mark">-</span>
-                            <span>{bullet}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </article>
+            </div>
+          ) : (
+            <>
+              <div className="tab-row">
+                {TAB_ORDER.map((tab) => (
+                  <button
+                    className={activeTab === tab.key ? "tab-button active" : "tab-button"}
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    type="button"
+                  >
+                    {tab.label}
+                  </button>
                 ))}
               </div>
-            )}
-          </div>
+
+              <div className="result-surface">
+                {activeTab === "rawLog" ? (
+                  <div className="report-view">
+                    <article className="report-card raw-log-only-card">
+                      <div className="raw-log-panel">
+                        <pre className="raw-log-text">{resultState.sections.rawLog}</pre>
+                      </div>
+                    </article>
+                  </div>
+                ) : (
+                  <div className="report-view">
+                    <section className="report-hero">
+                      <h3>{activeSection.headline}</h3>
+                      <div className={`accent-bar accent-${activeTab}`} />
+                    </section>
+
+                    {activeSection.groups.map((group) => (
+                      <article className="report-card" key={group.title}>
+                        <h4>{group.title}</h4>
+                        <p>{group.body}</p>
+                        {group.bullets.length > 0 && (
+                          <div className="bullet-panel">
+                            {group.bullets.map((bullet) => (
+                              <div className="bullet-line" key={`${group.title}-${bullet}`}>
+                                <span className="bullet-mark">-</span>
+                                <span>{bullet}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
           {errorText ? <div className="error-banner">{errorText}</div> : null}
         </section>

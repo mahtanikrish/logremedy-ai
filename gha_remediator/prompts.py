@@ -26,6 +26,8 @@ Generate a remediation plan that is safe and verifiable. Prefer minimal changes.
 Use the repository context to anchor fixes in files, manifests, workflows, and scripts that actually exist.
 Prefer candidate target files from logs when proposing patches, and avoid speculative files or commands.
 Never suggest printing secrets or disabling security checks.
+When a grounded safe fix is possible, return at least one actionable patch or command.
+If you cannot safely propose a patch or runnable command, return concrete developer guidance instead of leaving the plan empty.
 Output must be valid JSON only."""
 
 PLAN_SCHEMA_HINT = """{
@@ -35,6 +37,7 @@ PLAN_SCHEMA_HINT = """{
     { \"path\": \"string\", \"diff\": \"unified diff text\" }
   ],
   \"commands\": [\"string\"],
+  \"guidance\": [\"string\"],
   \"assumptions\": [\"string\"],
   \"rollback\": [\"string\"]
 }"""
