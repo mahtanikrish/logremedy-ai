@@ -70,10 +70,7 @@ def parse_env_file(path: str) -> Dict[str, str]:
     return values
 
 
-def resolve_github_token(
-    settings: Optional[AppSettings] = None,
-    environ: Optional[Dict[str, str]] = None,
-) -> Tuple[Optional[str], str]:
+def resolve_github_token(settings: Optional[AppSettings] = None,environ: Optional[Dict[str, str]] = None,) -> Tuple[Optional[str], str]:
     settings = settings or load_app_settings()
     environ = environ or os.environ
 

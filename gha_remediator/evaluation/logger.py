@@ -2,12 +2,7 @@ from typing import Dict, Any
 import json
 from pathlib import Path
 
-def log_case(
-    out_dir: str,
-    case_id: str,
-    log_meta: Dict[str, Any],
-    verification,
-):
+def log_case(out_dir: str, case_id: str, log_meta: Dict[str, Any], verification):
     Path(out_dir).mkdir(parents=True, exist_ok=True)
 
     record = {

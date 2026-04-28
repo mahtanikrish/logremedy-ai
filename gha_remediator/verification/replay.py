@@ -7,7 +7,6 @@ from typing import Optional, Dict, Any, Tuple
 @dataclass(frozen=True)
 class ReplayConfig:
     act_binary: str = "act"
-    # You can specify a job name or event; left minimal for prototype.
     event: str = "push"
     job: Optional[str] = None
     workdir: Optional[str] = None
@@ -18,12 +17,7 @@ def act_available(act_binary: str = "act") -> bool:
     return which(act_binary) is not None
 
 
-def replay_skipped_evidence(
-    *,
-    reason: str,
-    cfg: Optional[ReplayConfig],
-    repo: str,
-) -> Dict[str, Any]:
+def replay_skipped_evidence(*, reason: str, cfg: Optional[ReplayConfig], repo: str) -> Dict[str, Any]:
     return {
         "attempted": False,
         "tool_available": act_available(cfg.act_binary if cfg is not None else "act"),

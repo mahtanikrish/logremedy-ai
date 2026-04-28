@@ -85,7 +85,7 @@ class RepoContext:
 @dataclass
 class Patch:
     path: str
-    diff: str  # unified diff text
+    diff: str  
 
 @dataclass
 class RemediationPlan:

@@ -8,11 +8,7 @@ from ..llm.base import LLMClient, LLMConfig, last_response_metadata
 from .. import prompts
 from ..repo_context import format_repo_context
 
-def build_planner_user_prompt(
-    report: RCAReport,
-    docs: List[Doc],
-    repo_context: Optional[RepoContext],
-) -> str:
+def build_planner_user_prompt(report: RCAReport, docs: List[Doc], repo_context: Optional[RepoContext],) -> str:
     docs_text = "\n\n".join([f"[{d.doc_id}] {d.title}\n{d.text}" for d in docs])[:12000]
     repo_text = format_repo_context(repo_context) if repo_context is not None else "Repo context unavailable."
 
@@ -25,13 +21,7 @@ def build_planner_user_prompt(
         f"Constraints:\n- Prefer minimal changes\n- Keep risk low when possible\n- Provide rollback\n"
     )
 
-def plan_with_llm(
-    report: RCAReport,
-    docs: List[Doc],
-    repo_context: Optional[RepoContext],
-    llm: LLMClient,
-    llm_cfg: Optional[LLMConfig] = None,
-) -> RemediationPlan:
+def plan_with_llm(report: RCAReport, docs: List[Doc], repo_context: Optional[RepoContext], llm: LLMClient, llm_cfg: Optional[LLMConfig] = None,) -> RemediationPlan:
     llm_cfg = llm_cfg or LLMConfig()
     user = build_planner_user_prompt(report, docs, repo_context)
 

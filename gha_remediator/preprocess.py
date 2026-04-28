@@ -31,6 +31,7 @@ def _keyword_hit(text: str, keywords: List[str]) -> bool:
     t = text.lower()
     return any(k in t for k in keywords)
 
+# This algorithm is derived from the research done in LogSage[17] 
 def key_log_filter(lines: List[LogLine], keywords: List[str] = DEFAULT_KEYWORDS, success_templates: Optional[set[str]] = None, cfg: PreprocessConfig = PreprocessConfig(),) -> List[LogLine]:
 
     # Select candidate lines using success-template filtering, keywords, and tail bias
@@ -129,11 +130,7 @@ def approx_tokens(text: str, model: Optional[str] = None) -> int:
     return len(encoding.encode_ordinary(text))
 
 
-def raw_tail_select(
-    lines: List[LogLine],
-    cfg: PreprocessConfig = PreprocessConfig(),
-    model: Optional[str] = None,
-) -> List[LogLine]:
+def raw_tail_select(lines: List[LogLine], cfg: PreprocessConfig = PreprocessConfig(), model: Optional[str] = None) -> List[LogLine]:
     if not lines:
         return []
 
@@ -149,13 +146,8 @@ def raw_tail_select(
     selected.reverse()
     return selected
 
-def token_overflow_prune(
-    blocks: List[LogBlock],
-    key_lines: List[LogLine],
-    cfg: PreprocessConfig = PreprocessConfig(),
-    model: Optional[str] = None,
-) -> List[LogBlock]:
-    
+
+def token_overflow_prune( blocks: List[LogBlock], key_lines: List[LogLine], cfg: PreprocessConfig = PreprocessConfig(), model: Optional[str] = None,) -> List[LogBlock]:
     # Rank blocks by weighted signal density and prune to token budget
     if not blocks:
         return []
@@ -201,11 +193,7 @@ def token_overflow_prune(
     return picked
 
 
-def _trim_block_to_budget(
-    block: LogBlock,
-    cfg: PreprocessConfig,
-    model: Optional[str] = None,
-) -> LogBlock:
+def _trim_block_to_budget(block: LogBlock, cfg: PreprocessConfig, model: Optional[str] = None) -> LogBlock:
     if approx_tokens(block.to_text(), model=model) <= cfg.token_budget:
         return block
 

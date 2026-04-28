@@ -18,11 +18,7 @@ def _load_ground_truth(log_path: Path) -> Optional[Dict]:
         return None
 
 
-def load_failure_logs(
-    root: str = "dataset/synthetic",
-    limit: Optional[int] = None,
-    with_ground_truth: bool = True,
-) -> List[Dict]:
+def load_failure_logs(root: str = "dataset/synthetic",limit: Optional[int] = None,with_ground_truth: bool = True,) -> List[Dict]:
     """
     Load synthetic failure logs. Optionally attach ground-truth labels.
 

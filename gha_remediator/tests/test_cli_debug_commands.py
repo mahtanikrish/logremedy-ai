@@ -3,6 +3,20 @@ import json
 from gha_remediator import cli
 
 
+def test_cli_build_arg_parser_registers_all_public_commands():
+    parser = cli.build_arg_parser()
+    choices = parser._subparsers._group_actions[0].choices
+
+    assert set(choices) == {
+        "run",
+        "eval-synthetic",
+        "eval-benchmark",
+        "export-real-case",
+        "inspect-context",
+        "debug-plan-input",
+    }
+
+
 def _write(path, text):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -135,3 +149,44 @@ def test_cli_inspect_context_without_repo_reports_scan_error(monkeypatch, tmp_pa
     payload = json.loads(capsys.readouterr().out)
     assert payload["repo_context"]["metadata"]["scan_error"] == "repo not provided"
     assert payload["repo_context_summary"].startswith("Repo root: (not provided)")
+
+
+def test_cli_inspect_context_uses_shared_runtime_factory(monkeypatch, tmp_path, capsys):
+    log_path = _write_log(tmp_path)
+    captured = {}
+
+    class _StubRemediator:
+        def analyze(self, raw_log_text):
+            from gha_remediator.types import RCAReport
+
+            captured["raw_log_text"] = raw_log_text
+            return RCAReport(
+                failure_class="environment_dependency_failure",
+                root_cause_label="missing_python_dependency",
+                root_cause_text="Missing Python dependency (module import failed).",
+                root_causes=["Missing Python dependency (module import failed)."],
+                key_lines=[],
+                blocks=[],
+                metadata={},
+            )
+
+    def fake_build_remediator(**kwargs):
+        captured["kwargs"] = kwargs
+        return _StubRemediator()
+
+    monkeypatch.setattr("gha_remediator.cli.build_remediator", fake_build_remediator)
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "gha-remediator",
+            "inspect-context",
+            "--log",
+            str(log_path),
+        ],
+    )
+
+    cli.main()
+
+    assert captured["kwargs"]["enable_llm"] is False
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["failure_class"] == "environment_dependency_failure"

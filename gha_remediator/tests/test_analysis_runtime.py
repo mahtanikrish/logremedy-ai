@@ -5,6 +5,7 @@ from gha_remediator.services.analysis_runtime import (
     describe_kb,
     load_kb_for_settings,
     normalize_repo_path,
+    run_synthetic_analysis_text,
 )
 
 
@@ -37,3 +38,32 @@ def test_describe_kb_reports_default_docs():
     assert payload["configured"] is False
     assert payload["source"] == "default"
     assert payload["docCount"] > 0
+
+
+def test_run_synthetic_analysis_text_uses_shared_runtime_factory(monkeypatch):
+    captured = {}
+
+    class _StubRemediator:
+        def run(self, *, raw_log_text, repo, replay, job):
+            captured["raw_log_text"] = raw_log_text
+            captured["repo"] = repo
+            captured["replay"] = replay
+            captured["job"] = job
+            return {"ok": True}
+
+    def fake_build_remediator(**kwargs):
+        captured["kwargs"] = kwargs
+        return _StubRemediator()
+
+    monkeypatch.setattr("gha_remediator.services.analysis_runtime.build_remediator", fake_build_remediator)
+    monkeypatch.setattr(
+        "gha_remediator.services.analysis_runtime.load_app_settings",
+        lambda: AppSettings(),
+    )
+
+    result = run_synthetic_analysis_text("failure", "   ", "gpt-4o-mini")
+
+    assert result == {"ok": True}
+    assert captured["kwargs"]["model"] == "gpt-4o-mini"
+    assert captured["kwargs"]["max_output_tokens"] == 2200
+    assert captured["repo"] == ""

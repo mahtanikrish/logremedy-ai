@@ -1,6 +1,0 @@
-Step: Setup Python
-Python 3.11.6
-Step: Install deps
-Requirement already satisfied: requests==2.31.0
-Step: Run tests
-All tests passed

@@ -19,12 +19,9 @@ def to_lines(text: str) -> List[LogLine]:
         lines.append(LogLine(i, strip_ansi(raw.rstrip("\n"))))
     return lines
 
+# Normalizing log lines for rough template matching. This was an added feature for when success logs are available so that the system can build success log templates to filter out noise from failing logs.  
+# This is a lightweight implementation of the Drain [9] algorithms template mining
 def normalize_for_template(line: str) -> str:
-    """Normalize a log line for rough template matching
-
-    Replace common variable substrings (hashes, numbers, file paths) with placeholders.
-    This is a lightweight stand-in for full Drain-style template mining.
-    """
     s = line
     s = re.sub(r"0x[0-9a-fA-F]+", "<HEX>", s)
     s = re.sub(r"\b\d+\b", "<NUM>", s)

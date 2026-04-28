@@ -79,13 +79,7 @@ class AdapterCheckResult:
     skip_sandbox: bool = False
 
 
-def select_adapter(
-    plan: RemediationPlan,
-    *,
-    report: Optional[RCAReport],
-    repo_context: Optional[RepoContext],
-    default_workdir: str = ".",
-) -> AdapterSelection:
+def select_adapter(plan: RemediationPlan, *, report: Optional[RCAReport], repo_context: Optional[RepoContext], default_workdir: str = ".") -> AdapterSelection:
     touched = [patch.path for patch in plan.patches]
     report_text = _report_text(report)
     node_workspace = preferred_node_workspace(repo_context) or default_workdir
@@ -199,14 +193,7 @@ def select_adapter(
     )
 
 
-def run_adapter_check(
-    selection: AdapterSelection,
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    report: Optional[RCAReport],
-    repo_context: Optional[RepoContext],
-) -> AdapterCheckResult:
+def run_adapter_check(selection: AdapterSelection, *, patched_repo: str, plan: RemediationPlan, report: Optional[RCAReport], repo_context: Optional[RepoContext]) -> AdapterCheckResult:
     if selection.name == "codespell":
         return _run_codespell_adapter(patched_repo=patched_repo, plan=plan, selection=selection)
     if selection.name == "workflow_yaml":
@@ -226,12 +213,7 @@ def run_adapter_check(
     return _run_generic_adapter(plan=plan, selection=selection)
 
 
-def _run_codespell_adapter(
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_codespell_adapter(*, patched_repo: str, plan: RemediationPlan, selection: AdapterSelection) -> AdapterCheckResult:
     tool = shutil.which("codespell")
     if tool is None:
         return AdapterCheckResult(
@@ -297,11 +279,7 @@ def _run_codespell_adapter(
     )
 
 
-def _run_workflow_yaml_adapter(
-    *,
-    patched_repo: str,
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_workflow_yaml_adapter(*, patched_repo: str, selection: AdapterSelection) -> AdapterCheckResult:
     workflow_files = list(selection.details.get("workflow_targets", []))
     if not workflow_files:
         return AdapterCheckResult(
@@ -385,12 +363,7 @@ def _run_workflow_yaml_adapter(
     )
 
 
-def _run_python_dependency_manifest_adapter(
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_python_dependency_manifest_adapter(*, patched_repo: str, plan: RemediationPlan, selection: AdapterSelection) -> AdapterCheckResult:
     manifest_targets = list(selection.details.get("manifest_targets", []))
     if not manifest_targets:
         return AdapterCheckResult(
@@ -450,14 +423,7 @@ def _run_python_dependency_manifest_adapter(
     )
 
 
-def _run_pytest_target_adapter(
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    report: Optional[RCAReport],
-    repo_context: Optional[RepoContext],
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_pytest_target_adapter(*, patched_repo: str, plan: RemediationPlan, report: Optional[RCAReport], repo_context: Optional[RepoContext], selection: AdapterSelection) -> AdapterCheckResult:
     tool = shutil.which("pytest")
     if tool is None:
         return AdapterCheckResult(
@@ -526,14 +492,7 @@ def _run_pytest_target_adapter(
     )
 
 
-def _run_python_quality_target_adapter(
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    report: Optional[RCAReport],
-    repo_context: Optional[RepoContext],
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_python_quality_target_adapter(*, patched_repo: str, plan: RemediationPlan, report: Optional[RCAReport], repo_context: Optional[RepoContext], selection: AdapterSelection) -> AdapterCheckResult:
     target, target_resolution = _resolve_python_quality_target(
         plan=plan,
         repo_root=patched_repo,
@@ -644,12 +603,7 @@ def _run_python_quality_target_adapter(
     )
 
 
-def _run_shell_syntax_adapter(
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_shell_syntax_adapter(*, patched_repo: str, plan: RemediationPlan, selection: AdapterSelection) -> AdapterCheckResult:
     shell_files = [
         patch.path
         for patch in plan.patches
@@ -705,12 +659,7 @@ def _run_shell_syntax_adapter(
     )
 
 
-def _run_python_source_adapter(
-    *,
-    patched_repo: str,
-    plan: RemediationPlan,
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_python_source_adapter(*, patched_repo: str, plan: RemediationPlan, selection: AdapterSelection) -> AdapterCheckResult:
     python_files = [
         patch.path
         for patch in plan.patches
@@ -769,11 +718,7 @@ def _run_python_source_adapter(
     )
 
 
-def _run_node_workspace_adapter(
-    *,
-    selection: AdapterSelection,
-    repo_context: Optional[RepoContext],
-) -> AdapterCheckResult:
+def _run_node_workspace_adapter(*, selection: AdapterSelection, repo_context: Optional[RepoContext]) -> AdapterCheckResult:
     manifest = preferred_node_manifest(repo_context)
     if manifest is None:
         return AdapterCheckResult(
@@ -817,11 +762,7 @@ def _run_node_workspace_adapter(
     )
 
 
-def _run_generic_adapter(
-    *,
-    plan: RemediationPlan,
-    selection: AdapterSelection,
-) -> AdapterCheckResult:
+def _run_generic_adapter(*, plan: RemediationPlan, selection: AdapterSelection) -> AdapterCheckResult:
     if plan.commands:
         return AdapterCheckResult(
             status="inconclusive",
@@ -844,12 +785,7 @@ def _run_generic_adapter(
     )
 
 
-def _resolve_workflow_targets(
-    *,
-    plan: RemediationPlan,
-    report: Optional[RCAReport],
-    repo_context: Optional[RepoContext],
-) -> list[str]:
+def _resolve_workflow_targets(*, plan: RemediationPlan, report: Optional[RCAReport], repo_context: Optional[RepoContext]) -> list[str]:
     touched = [
         patch.path
         for patch in plan.patches
@@ -884,12 +820,7 @@ def _python_quality_target_requested(plan: RemediationPlan, report: Optional[RCA
     return any(_is_broad_project_command(command) for command in plan.commands)
 
 
-def _resolve_python_quality_target(
-    *,
-    plan: RemediationPlan,
-    repo_root: str,
-    repo_context: Optional[RepoContext],
-) -> tuple[Optional[str], dict[str, Any]]:
+def _resolve_python_quality_target(*, plan: RemediationPlan, repo_root: str, repo_context: Optional[RepoContext]) -> tuple[Optional[str], dict[str, Any]]:
     touched = [
         PurePosixPath(patch.path).as_posix()
         for patch in plan.patches
@@ -935,12 +866,7 @@ def _resolve_python_quality_target(
     }
 
 
-def _select_python_quality_validation(
-    *,
-    plan: RemediationPlan,
-    report: Optional[RCAReport],
-    target: str,
-) -> Optional[dict[str, Any]]:
+def _select_python_quality_validation(*, plan: RemediationPlan, report: Optional[RCAReport], target: str) -> Optional[dict[str, Any]]:
     text = _report_text(report)
     command_text = " ".join(command.strip().lower() for command in plan.commands)
     if "ruff" in text or "i001" in text or "ruff" in command_text:
@@ -996,12 +922,7 @@ def _pytest_target_requested(plan: RemediationPlan, report: Optional[RCAReport])
     return any(command.strip().lower().startswith("pytest") for command in plan.commands)
 
 
-def _resolve_pytest_command(
-    *,
-    plan: RemediationPlan,
-    repo_root: str,
-    repo_context: Optional[RepoContext],
-) -> tuple[Optional[list[str]], str, dict[str, Any]]:
+def _resolve_pytest_command(*, plan: RemediationPlan, repo_root: str, repo_context: Optional[RepoContext]) -> tuple[Optional[list[str]], str, dict[str, Any]]:
     for command in plan.commands:
         parsed = shlex.split(command)
         if not parsed or parsed[0] != "pytest":
@@ -1257,25 +1178,14 @@ def _workflow_fallback_check(path: str) -> dict[str, Any]:
     return {"ok": True, "msg": "workflow fallback validation passed"}
 
 
-def _run_tool_command(
-    tool_name: str,
-    args: list[str],
-    *,
-    cwd: str,
-    timeout_s: int,
-) -> dict[str, Any]:
+def _run_tool_command(tool_name: str, args: list[str], *, cwd: str, timeout_s: int) -> dict[str, Any]:
     tool = shutil.which(tool_name)
     if tool is None:
         return {"status": "missing", "details": {"tool": tool_name}}
     return _run_command([tool, *args], cwd=cwd, timeout_s=timeout_s)
 
 
-def _maybe_run_pre_commit_fallback(
-    *,
-    target: str,
-    cwd: str,
-    details: dict[str, Any],
-) -> Optional[AdapterCheckResult]:
+def _maybe_run_pre_commit_fallback(*, target: str, cwd: str, details: dict[str, Any]) -> Optional[AdapterCheckResult]:
     completed = _run_tool_command(
         "pre-commit",
         ["run", "--files", target],

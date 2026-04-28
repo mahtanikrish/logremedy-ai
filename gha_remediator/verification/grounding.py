@@ -24,13 +24,7 @@ class GroundingDecision:
     sandbox_workdir: str = "."
 
 
-def evaluate_grounding(
-    plan: RemediationPlan,
-    *,
-    repo: str,
-    report: Optional[RCAReport] = None,
-    repo_context: Optional[RepoContext] = None,
-) -> GroundingDecision:
+def evaluate_grounding(plan: RemediationPlan,*,repo: str,report: Optional[RCAReport] = None,repo_context: Optional[RepoContext] = None,) -> GroundingDecision:
     repo_root = Path(repo).expanduser()
     command_decision = _evaluate_command_grounding(plan, repo_context=repo_context)
     if not command_decision.allowed:
@@ -84,14 +78,7 @@ def evaluate_grounding(
     )
 
 
-def _evaluate_patch_grounding(
-    patch_path: str,
-    *,
-    repo_root: Path,
-    plan: RemediationPlan,
-    report: Optional[RCAReport],
-    repo_context: Optional[RepoContext],
-) -> dict[str, Any]:
+def _evaluate_patch_grounding(patch_path: str,*,repo_root: Path,plan: RemediationPlan,report: Optional[RCAReport],repo_context: Optional[RepoContext],) -> dict[str, Any]:
     normalized = PurePosixPath(patch_path.replace("\\", "/").strip()).as_posix()
     full_path = repo_root / normalized
     exists = full_path.exists()
@@ -212,12 +199,7 @@ def _evaluate_patch_grounding(
     return decision
 
 
-def _supported_creation_target(
-    normalized_path: str,
-    repo_root: Path,
-    plan: RemediationPlan,
-    repo_context: Optional[RepoContext],
-) -> bool:
+def _supported_creation_target(normalized_path: str,repo_root: Path,plan: RemediationPlan,repo_context: Optional[RepoContext],) -> bool:
     candidate = repo_root / normalized_path
     parent = candidate.parent
     if not parent.exists() or not parent.is_dir():
@@ -244,11 +226,7 @@ def _supported_creation_target(
     return False
 
 
-def _evaluate_command_grounding(
-    plan: RemediationPlan,
-    *,
-    repo_context: Optional[RepoContext],
-) -> GroundingDecision:
+def _evaluate_command_grounding(plan: RemediationPlan,*, repo_context: Optional[RepoContext],) -> GroundingDecision:
     sandbox_workdir = "."
     command_details: list[dict[str, Any]] = []
 
@@ -333,11 +311,7 @@ def _evaluate_command_grounding(
     )
 
 
-def _workspace_has_lockfile(
-    repo_context: Optional[RepoContext],
-    workspace: Optional[str],
-    names: set[str],
-) -> bool:
+def _workspace_has_lockfile(repo_context: Optional[RepoContext],workspace: Optional[str],names: set[str],) -> bool:
     if repo_context is None or workspace is None:
         return False
     expected_parent = "." if workspace == "." else workspace
@@ -367,12 +341,7 @@ def _path_mentioned_in_report(path: str, report: RCAReport) -> bool:
     return False
 
 
-def _promote_unique_candidate_match(
-    patch_path: str,
-    *,
-    repo_root: Path,
-    repo_context: Optional[RepoContext],
-) -> Optional[dict[str, Any]]:
+def _promote_unique_candidate_match(patch_path: str,*,repo_root: Path,repo_context: Optional[RepoContext],) -> Optional[dict[str, Any]]:
     if repo_context is None:
         return None
 

@@ -48,12 +48,7 @@ class GHARemediator:
         self.llm = llm
         self.llm_cfg = llm_cfg or LLMConfig()
 
-    def analyze(
-        self,
-        raw_log_text: str,
-        success_logs: Optional[List[str]] = None,
-        preprocessing_mode: str = "curated",
-    ) -> RCAReport:
+    def analyze(self, raw_log_text: str, success_logs: Optional[List[str]] = None, preprocessing_mode: str = "curated",) -> RCAReport:
         return run_rca(
             raw_log_text,
             success_log_texts=success_logs,
@@ -66,12 +61,7 @@ class GHARemediator:
         query = (" ".join(report.root_causes) + "\n" + "\n".join([b.to_text() for b in report.blocks[:1]]))[:5000]
         return self.kb.retrieve(query, top_k=top_k)
 
-    def propose_fix(
-        self,
-        report: RCAReport,
-        docs: Optional[List[Doc]] = None,
-        repo_context: Optional[RepoContext] = None,
-    ) -> RemediationPlan:
+    def propose_fix(self, report: RCAReport, docs: Optional[List[Doc]] = None, repo_context: Optional[RepoContext] = None,) -> RemediationPlan:
         docs = docs or []
         planning_repo_context = repo_context if _repo_context_is_usable(repo_context) else None
 
@@ -138,16 +128,7 @@ class GHARemediator:
                 )
         return _finalize_plan(plan)
 
-    def verify(
-        self,
-        plan: RemediationPlan,
-        repo: Optional[str],
-        report: Optional[RCAReport] = None,
-        repo_context: Optional[RepoContext] = None,
-        replay: bool = False,
-        job: Optional[str] = None,
-        verification_profile: VerificationProfile = "strict",
-    ) -> VerificationResult:
+    def verify(self,plan: RemediationPlan,repo: Optional[str], report: Optional[RCAReport] = None, repo_context: Optional[RepoContext] = None, replay: bool = False, job: Optional[str] = None, verification_profile: VerificationProfile = "strict",) -> VerificationResult:
         if repo is None or not str(repo).strip():
             return VerificationResult(
                 status="inconclusive",
@@ -206,16 +187,7 @@ class GHARemediator:
             repo_context=repo_context,
         )
 
-    def run(
-        self,
-        raw_log_text: str,
-        repo: Optional[str],
-        success_logs: Optional[List[str]] = None,
-        replay: bool = False,
-        job: Optional[str] = None,
-        verification_profile: VerificationProfile = "strict",
-        preprocessing_mode: str = "curated",
-    ) -> Dict[str, Any]:
+    def run(self,raw_log_text: str, repo: Optional[str], success_logs: Optional[List[str]] = None, replay: bool = False,job: Optional[str] = None,verification_profile: VerificationProfile = "strict",preprocessing_mode: str = "curated",) -> Dict[str, Any]:
         report = self.analyze(
             raw_log_text,
             success_logs=success_logs,

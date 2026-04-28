@@ -5,16 +5,7 @@ import subprocess
 from typing import Tuple, Dict, Any
 
 
-def verify_commands_locally(
-    commands: list[str],
-    repo: str,
-    workdir: str = ".",
-    timeout_s: int = 30,
-) -> Tuple[str, Dict[str, Any]]:
-    """
-    Fast, deterministic sandbox verification.
-    Runs remediation commands locally without GitHub Actions or act.
-    """
+def verify_commands_locally(commands: list[str], repo: str, workdir: str = ".", timeout_s: int = 30,) -> Tuple[str, Dict[str, Any]]:
 
     if not commands:
         return "inconclusive", {"reason": "no commands to run"}

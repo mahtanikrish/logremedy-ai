@@ -58,12 +58,16 @@ def _extract_logs(zip_blob: bytes) -> List[Tuple[str, str]]:
     return out
 
 
-def _failed_runs(
-    session: requests.Session,
-    owner: str,
-    name: str,
-    per_page: int,
-) -> List[Dict[str, Any]]:
+def combine_github_log_entries(entries: List[Dict[str, Any]]) -> str:
+    ordered = sorted(entries, key=lambda item: item.get("path", ""))
+    parts: List[str] = []
+    for entry in ordered:
+        parts.append(f"===== {entry.get('path', 'log')} =====")
+        parts.append(entry.get("content", ""))
+    return "\n".join(parts)
+
+
+def _failed_runs(session: requests.Session, owner: str, name: str, per_page: int) -> List[Dict[str, Any]]:
     per_page = min(max(per_page, 1), 100)
     url = f"{GITHUB_API}/repos/{owner}/{name}/actions/runs"
     data = _get_json(
@@ -88,13 +92,7 @@ def _download_run_logs(session: requests.Session, owner: str, name: str, run_id:
     return _extract_logs(_get_bytes(session, url))
 
 
-def _download_artifacts_for_run(
-    session: requests.Session,
-    owner: str,
-    name: str,
-    run_id: int,
-    out_dir: str,
-) -> List[str]:
+def _download_artifacts_for_run(session: requests.Session, owner: str, name: str, run_id: int, out_dir: str,) -> List[str]:
     url = f"{GITHUB_API}/repos/{owner}/{name}/actions/runs/{run_id}/artifacts"
     data = _get_json(session, url, params={"per_page": 100})
     artifacts = data.get("artifacts", [])
@@ -117,14 +115,7 @@ def _download_artifacts_for_run(
     return paths
 
 
-def load_github_actions_logs(
-    repo: str,
-    run_id: Optional[int] = None,
-    limit: int = 1,
-    token: Optional[str] = None,
-    include_artifacts: bool = False,
-    artifact_dir: Optional[str] = None,
-) -> List[Dict[str, Any]]:
+def load_github_actions_logs(repo: str, run_id: Optional[int] = None, limit: int = 1, token: Optional[str] = None, include_artifacts: bool = False, artifact_dir: Optional[str] = None,) -> List[Dict[str, Any]]:
     """
     Load failed GitHub Actions run logs and normalize to synthetic-loader style.
 

@@ -464,10 +464,7 @@ def _build_repo_dirs(root: Path) -> set[str]:
     return repo_dirs
 
 
-def _extract_package_json_details(
-    root: Path,
-    manifests: Sequence[str],
-) -> tuple[Dict[str, Dict[str, str]], Dict[str, str]]:
+def _extract_package_json_details(root: Path, manifests: Sequence[str],) -> tuple[Dict[str, Dict[str, str]], Dict[str, str]]:
     package_scripts: Dict[str, Dict[str, str]] = {}
     package_managers: Dict[str, str] = {}
 
@@ -512,12 +509,7 @@ def _package_manager_from_package_json(payload: dict) -> Optional[str]:
     return None
 
 
-def _extract_tool_versions(
-    root: Path,
-    workflow_files: Sequence[str],
-    manifests: Sequence[str],
-    package_managers: Dict[str, str],
-) -> Dict[str, List[str]]:
+def _extract_tool_versions(root: Path, workflow_files: Sequence[str], manifests: Sequence[str], package_managers: Dict[str, str],) -> Dict[str, List[str]]:
     tool_versions: Dict[str, List[str]] = defaultdict(list)
 
     for workflow in workflow_files:
@@ -561,11 +553,7 @@ def _extract_tool_versions(
     return {tool: _dedupe_preserve_order(values) for tool, values in tool_versions.items()}
 
 
-def _extract_candidate_files(
-    raw_log_text: str,
-    repo_files_set: set[str],
-    repo_dirs_set: set[str],
-) -> List[RepoCandidateFile]:
+def _extract_candidate_files(raw_log_text: str, repo_files_set: set[str],repo_dirs_set: set[str],) -> List[RepoCandidateFile]:
     found: Dict[str, RepoCandidateFile] = {}
 
     def add(path: Optional[str], reason: str, line_hint: Optional[int] = None) -> None:
@@ -629,11 +617,7 @@ def _extract_candidate_files(
     return sorted(found.values(), key=lambda item: item.path)[:12]
 
 
-def _resolve_logged_path(
-    raw_path: str,
-    repo_files_set: set[str],
-    repo_dirs_set: set[str],
-) -> Optional[str]:
+def _resolve_logged_path(raw_path: str, repo_files_set: set[str], repo_dirs_set: set[str],) -> Optional[str]:
     cleaned = raw_path.strip().replace("\\", "/")
     if not cleaned or cleaned.startswith(("http://", "https://")):
         return None
@@ -648,12 +632,7 @@ def _resolve_logged_path(
     return None
 
 
-def _resolve_import_path(
-    import_path: str,
-    source_path: Optional[str],
-    repo_files_set: set[str],
-    repo_dirs_set: set[str],
-) -> Optional[str]:
+def _resolve_import_path(import_path: str, source_path: Optional[str], repo_files_set: set[str],repo_dirs_set: set[str],) -> Optional[str]:
     cleaned = import_path.strip().replace("\\", "/")
     if not cleaned or cleaned.startswith(("@", "#")):
         return None
@@ -690,12 +669,7 @@ def _repo_relative_candidates(path: str) -> List[str]:
     return _dedupe_preserve_order(candidate for candidate in candidates if candidate)
 
 
-def _is_plausible_missing_repo_path(
-    path: str,
-    repo_dirs_set: set[str],
-    *,
-    absolute_path: bool,
-) -> bool:
+def _is_plausible_missing_repo_path(path: str, repo_dirs_set: set[str], *, absolute_path: bool) -> bool:
     parent = PurePosixPath(path).parent.as_posix()
     if parent in {"", "."}:
         return not absolute_path
@@ -713,14 +687,7 @@ def _expand_import_candidates(path_without_suffix: str) -> Iterable[str]:
     return out
 
 
-def _build_tree_sample(
-    repo_files: Sequence[str],
-    manifests: Sequence[str],
-    lockfiles: Sequence[str],
-    workflow_files: Sequence[str],
-    candidate_files: Sequence[RepoCandidateFile],
-    max_entries: int = 18,
-) -> List[str]:
+def _build_tree_sample(repo_files: Sequence[str], manifests: Sequence[str], lockfiles: Sequence[str], workflow_files: Sequence[str], candidate_files: Sequence[RepoCandidateFile], max_entries: int = 18,) -> List[str]:
     top_level = sorted(
         {
             f"{entry.split('/', 1)[0]}/" if "/" in entry else entry
@@ -733,16 +700,7 @@ def _build_tree_sample(
     return _dedupe_preserve_order(prioritized)[:max_entries]
 
 
-def _select_snippets(
-    *,
-    root: Path,
-    report: RCAReport,
-    candidate_files: Sequence[RepoCandidateFile],
-    manifests: Sequence[str],
-    lockfiles: Sequence[str],
-    workflow_files: Sequence[str],
-    max_snippets: int = 5,
-) -> List[RepoSnippet]:
+def _select_snippets(*,root: Path,report: RCAReport,candidate_files: Sequence[RepoCandidateFile],manifests: Sequence[str],lockfiles: Sequence[str], workflow_files: Sequence[str],max_snippets: int = 5,) -> List[RepoSnippet]:
     wanted: List[tuple[str, str, Optional[int]]] = []
     wanted.extend((candidate.path, candidate.reason, candidate.line_hint) for candidate in candidate_files)
 

@@ -102,7 +102,7 @@ def create_app() -> Flask:
         return jsonify(
             {
                 "mode": "synthetic",
-                "statusText": f"Synthetic run complete: {display_name}",
+                "statusText": f"Log file analysis complete: {display_name}",
                 "result": result,
                 "rawLog": raw_log_text,
             }

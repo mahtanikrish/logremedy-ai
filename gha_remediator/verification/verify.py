@@ -23,7 +23,7 @@ from .workspace import (
     prepare_workspace_copy,
 )
 
-
+# Gate order: preconditions -> policy -> grounding -> patch_apply -> static -> adapter_check -> sandbox -> replay.
 GATE_ORDER = (
     "preconditions",
     "policy",
@@ -38,12 +38,7 @@ GATE_ORDER = (
 PYTHON_DEP_FIXES = ("python_add_dependency", "python_pin_dependency")
 
 
-def _gate_result(
-    name: str,
-    status: str,
-    reason: str,
-    details: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+def _gate_result(name: str, status: str, reason: str, details: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     return {
         "name": name,
         "status": status,
@@ -65,15 +60,7 @@ def _completed_gates(gates: List[Dict[str, Any]], terminal_gate: str) -> List[Di
     return completed
 
 
-def _build_evidence(
-    *,
-    terminal_gate: str,
-    gates: List[Dict[str, Any]],
-    capability: Dict[str, Any],
-    static: Optional[Dict[str, Any]] = None,
-    replay: Optional[Dict[str, Any]] = None,
-    extra: Optional[Dict[str, Any]] = None,
-) -> Dict[str, Any]:
+def _build_evidence(*, terminal_gate: str, gates: List[Dict[str, Any]], capability: Dict[str, Any], static: Optional[Dict[str, Any]] = None, replay: Optional[Dict[str, Any]] = None, extra: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     evidence: Dict[str, Any] = {
         "gate": terminal_gate,
         "gates": _completed_gates(gates, terminal_gate),
@@ -88,17 +75,7 @@ def _build_evidence(
     return evidence
 
 
-def _result(
-    *,
-    status: str,
-    reason: str,
-    terminal_gate: str,
-    gates: List[Dict[str, Any]],
-    capability: Dict[str, Any],
-    static: Optional[Dict[str, Any]] = None,
-    replay: Optional[Dict[str, Any]] = None,
-    extra: Optional[Dict[str, Any]] = None,
-) -> VerificationResult:
+def _result(*, status: str, reason: str, terminal_gate: str, gates: List[Dict[str, Any]], capability: Dict[str, Any], static: Optional[Dict[str, Any]] = None, replay: Optional[Dict[str, Any]] = None, extra: Optional[Dict[str, Any]] = None) -> VerificationResult:
     return VerificationResult(
         status=status,
         reason=reason,
@@ -142,16 +119,10 @@ def _inconclusive_reason(selection: AdapterSelection, adapter_result: AdapterChe
     return f"inconclusive because validator {selection.name} could not validate this case"
 
 
-def verify_plan(
-    plan: RemediationPlan,
-    repo: str,
-    replay_cfg: Optional[ReplayConfig] = None,
-    verification_profile: VerificationProfile = "strict",
-    report: Optional[RCAReport] = None,
-    repo_context: Optional[RepoContext] = None,
-) -> VerificationResult:
+def verify_plan(plan: RemediationPlan, repo: str, replay_cfg: Optional[ReplayConfig] = None, verification_profile: VerificationProfile = "strict", report: Optional[RCAReport] = None, repo_context: Optional[RepoContext] = None) -> VerificationResult:
     gates: List[Dict[str, Any]] = []
     touched = [p.path for p in plan.patches]
+    # Check that the repo exists and a verification workspace can be prepared.
     if not os.path.isdir(repo):
         gates.append(
             _gate_result(
@@ -193,6 +164,7 @@ def verify_plan(
     )
 
     with workspace:
+        # Check patch size, file targets, and commands against verification policy.
         budget_decision = evaluate_patch_budget(plan.patches, profile=verification_profile)
         if not budget_decision.allowed:
             gates.append(
@@ -269,6 +241,7 @@ def verify_plan(
             )
         )
 
+        # Check that the plan is actionable and grounded in repo evidence.
         if not plan.patches and not plan.commands:
             gates.append(
                 _gate_result(
@@ -320,6 +293,7 @@ def verify_plan(
             )
         )
 
+        # Check that the proposed patches apply cleanly in the workspace copy.
         try:
             patch_apply = apply_plan_patches(workspace, plan)
         except WorkspacePreparationError as err:
@@ -342,6 +316,7 @@ def verify_plan(
             )
         )
 
+        # Check touched files for basic parse and syntax errors.
         static = basic_static_validation(workspace.patched_repo, touched)
         static_checks = static.get("checks", [])
         first_failure = next((chk for chk in static_checks if chk.get("ok") is False), None)
@@ -393,6 +368,7 @@ def verify_plan(
                 )
             )
 
+        # Check the plan with a deterministic validator chosen for this case.
         selection = select_adapter(
             plan,
             report=report,
@@ -478,6 +454,7 @@ def verify_plan(
             if selection.execution.commands:
                 execution_commands = list(selection.execution.commands)
 
+        # Check planned execution in a local sandbox or dependency-specific venv.
         if plan.fix_type in PYTHON_DEP_FIXES:
             pkg = (
                 plan.evidence.get("extracted", {}).get("module")
@@ -678,6 +655,7 @@ def verify_plan(
             fallback_used=adapter_result.fallback_used,
         )
 
+        # Check the patched workflow with replay when replay is configured.
         if replay_cfg is None:
             replay = replay_skipped_evidence(
                 reason="replay not configured",

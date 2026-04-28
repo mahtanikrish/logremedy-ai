@@ -386,8 +386,15 @@ input {
 }
 
 .report-hero h3 {
-  margin: 0 0 14px;
+  margin: 0 0 8px;
   font-size: 1.8rem;
+}
+
+.report-kicker {
+  margin: 0 0 14px;
+  color: #675f57;
+  font-size: 1rem;
+  font-weight: 700;
 }
 
 .accent-bar {
@@ -409,13 +416,12 @@ input {
 
 .report-card {
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto;
   border-radius: 22px;
   padding: 20px 20px 18px;
   background: #ffffff;
   border: 1px solid #eadccb;
-  max-height: 320px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .report-card h4 {
@@ -427,8 +433,7 @@ input {
   margin: 0 0 14px;
   color: var(--muted);
   line-height: 1.6;
-  overflow: auto;
-  padding-right: 4px;
+  overflow-wrap: anywhere;
 }
 
 .bullet-panel {
@@ -438,7 +443,7 @@ input {
   display: grid;
   gap: 12px;
   min-height: 0;
-  overflow: auto;
+  overflow: visible;
 }
 
 .bullet-line {
@@ -448,11 +453,43 @@ input {
   align-items: start;
   color: #2f3a44;
   line-height: 1.6;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .bullet-mark {
   font-weight: 700;
+}
+
+.report-disclosure {
+  margin-top: 14px;
+  border-top: 1px solid #eadccb;
+  padding-top: 14px;
+}
+
+.report-disclosure summary {
+  cursor: pointer;
+  color: #2b6f78;
+  font-weight: 700;
+  list-style: none;
+}
+
+.report-disclosure summary::-webkit-details-marker {
+  display: none;
+}
+
+.report-disclosure summary::before {
+  content: "+";
+  display: inline-block;
+  margin-right: 8px;
+  font-weight: 800;
+}
+
+.report-disclosure[open] summary::before {
+  content: "-";
+}
+
+.disclosure-panel {
+  margin-top: 12px;
 }
 
 .raw-log-panel {

@@ -46,20 +46,18 @@ class GitHubModelsClient(LLMClient):
         if not s:
             raise RuntimeError("LLM returned empty content.")
 
-        # Strip markdown fences if present.
+        # Stripping markdown fences if present
         if s.startswith("```"):
             s = re.sub(r"^```(?:json)?\s*", "", s, flags=re.IGNORECASE)
             s = re.sub(r"\s*```$", "", s)
             s = s.strip()
 
-        # Fast path.
         try:
             json.loads(s)
             return s
         except Exception:
             pass
 
-        # Find first JSON object/array in mixed text.
         starts = [i for i in (s.find("{"), s.find("[")) if i != -1]
         if not starts:
             raise RuntimeError(f"LLM did not return JSON. Raw output head: {s[:220]!r}")
@@ -74,14 +72,7 @@ class GitHubModelsClient(LLMClient):
 
         raise RuntimeError(f"Unable to parse JSON from model output. Raw output head: {s[:220]!r}")
 
-    def generate_json(
-        self,
-        *,
-        system: str,
-        user: str,
-        schema_hint: str,
-        cfg: LLMConfig,
-    ) -> Dict[str, Any]:
+    def generate_json(self,*,system: str,user: str,schema_hint: str,cfg: LLMConfig,) -> Dict[str, Any]:
         self.last_response_metadata = {}
 
         deployment = cfg.model or "gpt-4o-mini"

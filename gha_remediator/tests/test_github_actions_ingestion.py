@@ -110,3 +110,19 @@ def test_skips_410_runs_and_uses_next(monkeypatch):
     out = gha.load_github_actions_logs("octocat/hello-world", limit=1, token="x")
     assert len(out) == 1
     assert out[0]["metadata"]["run_id"] == 200
+
+
+def test_combine_github_log_entries_orders_entries_by_path():
+    out = gha.combine_github_log_entries(
+        [
+            {"path": "b.log", "content": "second"},
+            {"path": "a.log", "content": "first"},
+        ]
+    )
+
+    assert out.splitlines() == [
+        "===== a.log =====",
+        "first",
+        "===== b.log =====",
+        "second",
+    ]

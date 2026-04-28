@@ -9,10 +9,7 @@ from pathlib import Path
 from typing import Any, Dict, Tuple
 
 
-def verify_python_dependency(
-    package_name: str,
-    timeout_s: int = 60,
-) -> Tuple[str, Dict[str, Any]]:
+def verify_python_dependency(package_name: str, timeout_s: int = 60) -> Tuple[str, Dict[str, Any]]:
     """Create a fresh venv and attempt `pip install <package_name>`."""
     tmp = tempfile.mkdtemp(prefix="gha_venv_")
     try:

@@ -5,20 +5,11 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
-from ..ingestion.github_actions import load_github_actions_logs
+from ..ingestion.github_actions import combine_github_log_entries, load_github_actions_logs
 
 
 def _slugify(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", value.lower()).strip("_")
-
-
-def _combined_log_text(entries: List[Dict[str, Any]]) -> str:
-    ordered = sorted(entries, key=lambda item: item.get("path", ""))
-    parts: List[str] = []
-    for entry in ordered:
-        parts.append(f"===== {entry.get('path', 'log')} =====")
-        parts.append(entry.get("content", ""))
-    return "\n".join(parts)
 
 
 def export_real_case_stub(
@@ -39,7 +30,7 @@ def export_real_case_stub(
     log_path = case_dir / f"{case_slug}.log"
     annotation_path = case_dir / f"{case_slug}.json"
 
-    log_path.write_text(_combined_log_text(entries), encoding="utf-8")
+    log_path.write_text(combine_github_log_entries(entries), encoding="utf-8")
 
     annotation = {
         "case_id": case_slug,
